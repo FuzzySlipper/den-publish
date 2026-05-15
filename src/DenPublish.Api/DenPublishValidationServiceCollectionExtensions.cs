@@ -58,9 +58,27 @@ public static class DenPublishValidationServiceCollectionExtensions
     private static ILivePromotionPublisher ReadLivePromotionPublisher(IConfiguration configuration, IGitCommandRunner git)
     {
         var enabled = configuration.GetValue<bool>("DenPublish:Publishing:Enabled");
-        return enabled
-            ? new GitPromotionPublisher(git)
+        if (!enabled)
+        {
+            return new DisabledLivePromotionPublisher();
+        }
+
+        var credentialPolicy = ReadCredentialPolicy(configuration);
+        return credentialPolicy.IsConfigured
+            ? new GitPromotionPublisher(git, credentialPolicy)
             : new DisabledLivePromotionPublisher();
+    }
+
+    private static GitPromotionCredentialPolicy ReadCredentialPolicy(IConfiguration configuration)
+    {
+        var section = configuration.GetSection("DenPublish:Publishing");
+        var credentialMode = section["CredentialMode"];
+        if (string.Equals(credentialMode, "ssh_command", StringComparison.Ordinal))
+        {
+            return GitPromotionCredentialPolicy.ExplicitSshCommand(section["GitSshCommand"] ?? string.Empty);
+        }
+
+        return GitPromotionCredentialPolicy.Unconfigured;
     }
 
     private static IWorkspacePathResolver ReadWorkspacePathResolver(IConfiguration configuration)

@@ -182,7 +182,7 @@ public sealed class GitLsRemoteCodeGateRefResolverTests
     {
         public IReadOnlyList<string>? Arguments { get; private set; }
 
-        public GitCommandResult Run(IReadOnlyList<string> arguments)
+        public GitCommandResult Run(IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null)
         {
             Arguments = arguments;
             return result;

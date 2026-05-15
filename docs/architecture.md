@@ -253,3 +253,12 @@ This endpoint is intentionally local-service telemetry, not a configuration writ
 Promotion validation now requires explicit Den review state on each submission. A submission being marked `approved` or `publish_requested` is necessary but not sufficient: the submission must also carry the review round referenced by the publish decision, the review verdict must be `looks_good`, and blocking review findings must either be resolved or covered by a decision-scoped override id.
 
 This keeps the trusted publisher from promoting work based only on stale status labels. Override ids are decision-local audit inputs: an unresolved blocking finding with an override id is publishable only when that same override id appears in `decision.scope_override_ids`; otherwise validation fails closed with `unresolved_blocking_findings`.
+
+
+## Explicit credential policy for live publish
+
+Live Git publishing no longer accepts ambient Git or SSH credentials from the service account. Even when `DenPublish:Publishing:Enabled=true`, the live publisher is constructed only when an explicit credential policy is configured.
+
+The first supported production policy is `DenPublish:Publishing:CredentialMode=ssh_command` plus a redacted `DenPublish:Publishing:GitSshCommand`. The command is passed only to the child `git push` process as `GIT_SSH_COMMAND`; `GIT_TERMINAL_PROMPT=0` is also set so the service cannot hang or fall back to interactive prompts. `/config/status` reports only the mode and a fingerprint, never the command value.
+
+This keeps future credential placement deliberate and prevents accidental use of random `agent` account SSH configuration.

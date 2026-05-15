@@ -130,3 +130,16 @@ This endpoint is the preferred integration point for a future central Den config
 Production publish and dry-run requests must include Den review state in the submission payload. The publisher validates that `submission.review.review_round_id` matches `decision.review_round_id`, the verdict is `looks_good`, and any unresolved blocking findings are either resolved or covered by explicit `decision.scope_override_ids`.
 
 Treat missing review state as a deployment/request bug. The service fails closed with `missing_review`; do not bypass this by loosening submission status alone.
+
+
+### Live publish credential policy
+
+Do not rely on ambient `agent` GitHub credentials for `/promotion/publish`. Live publishing requires all of the following before the service will construct the Git-backed live publisher:
+
+- `DenPublish__Publishing__Enabled=true`
+- `DenPublish__Publishing__CredentialMode=ssh_command`
+- `DenPublish__Publishing__GitSshCommand=<redacted operator-managed ssh command>`
+
+The SSH command value is treated as sensitive configuration. It is not included in `/config/status`; the status surface reports only `display=ssh_command` plus a fingerprint for drift checks. The service also sets `GIT_TERMINAL_PROMPT=0` for live `git push` calls.
+
+Credential file placement and canonical live smoke still require a separate explicit approval gate.

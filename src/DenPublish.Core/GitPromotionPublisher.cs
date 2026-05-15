@@ -1,5 +1,36 @@
 namespace DenPublish.Core;
 
+public sealed record GitPromotionCredentialPolicy(
+    bool IsConfigured,
+    string Mode,
+    IReadOnlyDictionary<string, string> Environment)
+{
+    public static GitPromotionCredentialPolicy Unconfigured { get; } = new(false, "unconfigured", new Dictionary<string, string>());
+
+    public static GitPromotionCredentialPolicy ExplicitSshCommand(string sshCommand)
+    {
+        if (string.IsNullOrWhiteSpace(sshCommand))
+        {
+            return Unconfigured;
+        }
+
+        return new GitPromotionCredentialPolicy(
+            true,
+            "ssh_command",
+            new Dictionary<string, string>
+            {
+                ["GIT_SSH_COMMAND"] = sshCommand,
+                ["GIT_TERMINAL_PROMPT"] = "0"
+            });
+    }
+
+    public static GitPromotionCredentialPolicy LocalFileRemoteForTesting()
+        => new(true, "local_file_remote_for_testing", new Dictionary<string, string>
+        {
+            ["GIT_TERMINAL_PROMPT"] = "0"
+        });
+}
+
 public sealed class DisabledLivePromotionPublisher : ILivePromotionPublisher
 {
     public bool IsEnabled => false;
@@ -12,7 +43,7 @@ public sealed class DisabledLivePromotionPublisher : ILivePromotionPublisher
                 "Live publishing requires an explicitly enabled credential-backed publisher configuration."));
 }
 
-public sealed class GitPromotionPublisher(IGitCommandRunner git) : ILivePromotionPublisher
+public sealed class GitPromotionPublisher(IGitCommandRunner git, GitPromotionCredentialPolicy credentialPolicy) : ILivePromotionPublisher
 {
     private static readonly char[] UnsafeBranchCharacters = [' ', '\t', '\n', '\r', '~', '^', ':', '?', '*', '[', '\\', ';'];
     private static readonly char[] UnsafeRefCharacters = [' ', '\t', '\n', '\r', '~', '^', ':', '?', '*', '[', '\\', ';'];
@@ -23,7 +54,7 @@ public sealed class GitPromotionPublisher(IGitCommandRunner git) : ILivePromotio
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var ready = ValidateReadyForLivePublish(request);
+        var ready = ValidateReadyForLivePublish(request, credentialPolicy);
         if (ready is not null)
         {
             return ready;
@@ -37,7 +68,7 @@ public sealed class GitPromotionPublisher(IGitCommandRunner git) : ILivePromotio
             "push",
             request.TargetRemoteUrl,
             pushRefSpec
-        ]);
+        ], credentialPolicy.Environment);
 
         if (push.ExitCode != 0)
         {
@@ -49,7 +80,7 @@ public sealed class GitPromotionPublisher(IGitCommandRunner git) : ILivePromotio
         return PromotionPublishResult.Published("published validated submission to canonical remote");
     }
 
-    private static PromotionPublishResult? ValidateReadyForLivePublish(PromotionPublishRequest request)
+    private static PromotionPublishResult? ValidateReadyForLivePublish(PromotionPublishRequest request, GitPromotionCredentialPolicy credentialPolicy)
     {
         if (request.Decision.ValidateOnly)
         {
@@ -114,6 +145,13 @@ public sealed class GitPromotionPublisher(IGitCommandRunner git) : ILivePromotio
             return PromotionPublishResult.Failed(
                 "live publishing is unavailable because target remote URL is missing",
                 new ValidationFailure(PublishFailureCode.CredentialUnavailable, "Canonical target remote URL is required before live promotion."));
+        }
+
+        if (!credentialPolicy.IsConfigured)
+        {
+            return PromotionPublishResult.Failed(
+                "live publishing is unavailable because no explicit credential policy is configured",
+                new ValidationFailure(PublishFailureCode.CredentialUnavailable, "Live Git publishing must be configured with an explicit credential policy; ambient Git or SSH credentials are not accepted."));
         }
 
         return null;

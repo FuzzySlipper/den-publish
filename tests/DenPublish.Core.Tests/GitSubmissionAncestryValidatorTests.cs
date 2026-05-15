@@ -77,7 +77,7 @@ public sealed class GitSubmissionAncestryValidatorTests
 
         public List<IReadOnlyList<string>> Commands { get; } = [];
 
-        public GitCommandResult Run(IReadOnlyList<string> arguments)
+        public GitCommandResult Run(IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null)
         {
             Commands.Add(arguments.ToArray());
             return results[_index++];

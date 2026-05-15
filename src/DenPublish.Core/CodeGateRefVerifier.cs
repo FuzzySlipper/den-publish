@@ -57,7 +57,7 @@ public sealed class CodeGatePublishValidationEngine(IPublishEngine contractValid
 
 public interface IGitCommandRunner
 {
-    GitCommandResult Run(IReadOnlyList<string> arguments);
+    GitCommandResult Run(IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null);
 }
 
 public sealed record GitCommandResult(int ExitCode, string StandardOutput, string StandardError);
@@ -107,7 +107,7 @@ public sealed class ProcessGitCommandRunner(TimeSpan? timeout = null) : IGitComm
 {
     private readonly TimeSpan _timeout = timeout ?? TimeSpan.FromSeconds(30);
 
-    public GitCommandResult Run(IReadOnlyList<string> arguments)
+    public GitCommandResult Run(IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null)
     {
         ArgumentNullException.ThrowIfNull(arguments);
 
@@ -116,6 +116,14 @@ public sealed class ProcessGitCommandRunner(TimeSpan? timeout = null) : IGitComm
         process.StartInfo.UseShellExecute = false;
         process.StartInfo.RedirectStandardOutput = true;
         process.StartInfo.RedirectStandardError = true;
+
+        if (environment is not null)
+        {
+            foreach (var item in environment)
+            {
+                process.StartInfo.Environment[item.Key] = item.Value;
+            }
+        }
 
         foreach (var argument in arguments)
         {

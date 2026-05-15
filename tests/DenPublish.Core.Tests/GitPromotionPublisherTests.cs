@@ -38,7 +38,7 @@ public sealed class GitPromotionPublisherTests : IDisposable
 
         var decision = Decision(validateOnly: false, targetBranch: "task/1424-live-publisher", expectedHead: Sha(head));
         var validation = ValidatedWorkflowResult(decision.ExpectedHeadCommit, localRef);
-        var publisher = new GitPromotionPublisher(new ProcessGitCommandRunner(TimeSpan.FromSeconds(10)));
+        var publisher = new GitPromotionPublisher(new ProcessGitCommandRunner(TimeSpan.FromSeconds(10)), GitPromotionCredentialPolicy.LocalFileRemoteForTesting());
 
         var result = publisher.Publish(new PromotionPublishRequest(decision, validation, workspace, canonical));
 
@@ -56,7 +56,7 @@ public sealed class GitPromotionPublisherTests : IDisposable
         var git = new RecordingGitCommandRunner(new GitCommandResult(0, string.Empty, string.Empty));
         var decision = Decision(validateOnly: true, targetBranch: "task/1424-live-publisher", expectedHead: Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
         var validation = ValidatedWorkflowResult(decision.ExpectedHeadCommit, "refs/den-publish/submissions/sub_live_001");
-        var publisher = new GitPromotionPublisher(git);
+        var publisher = new GitPromotionPublisher(git, GitPromotionCredentialPolicy.LocalFileRemoteForTesting());
 
         var result = publisher.Publish(new PromotionPublishRequest(decision, validation, "/tmp/workspace", "/tmp/canonical.git"));
 
@@ -72,7 +72,7 @@ public sealed class GitPromotionPublisherTests : IDisposable
         var git = new RecordingGitCommandRunner(new GitCommandResult(1, string.Empty, "permission denied"));
         var decision = Decision(validateOnly: false, targetBranch: "task/1424-live-publisher", expectedHead: Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
         var validation = ValidatedWorkflowResult(decision.ExpectedHeadCommit, "refs/den-publish/submissions/sub_live_001");
-        var publisher = new GitPromotionPublisher(git);
+        var publisher = new GitPromotionPublisher(git, GitPromotionCredentialPolicy.ExplicitSshCommand("ssh -i /run/den-publish/id_ed25519 -o IdentitiesOnly=yes"));
 
         var result = publisher.Publish(new PromotionPublishRequest(decision, validation, "/tmp/workspace", "git@example.invalid:repo.git"));
 
@@ -82,14 +82,49 @@ public sealed class GitPromotionPublisherTests : IDisposable
         Assert.Equal([["-C", "/tmp/workspace", "push", "git@example.invalid:repo.git", "refs/den-publish/submissions/sub_live_001:refs/heads/task/1424-live-publisher"]], git.Commands);
     }
 
+
+
+    [Fact]
+    public void Publish_FailsClosedWithoutExplicitCredentialPolicyBeforeRunningGit()
+    {
+        var git = new RecordingGitCommandRunner(new GitCommandResult(0, string.Empty, string.Empty));
+        var decision = Decision(validateOnly: false, targetBranch: "task/1424-live-publisher", expectedHead: Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        var validation = ValidatedWorkflowResult(decision.ExpectedHeadCommit, "refs/den-publish/submissions/sub_live_001");
+        var publisher = new GitPromotionPublisher(git, GitPromotionCredentialPolicy.Unconfigured);
+
+        var result = publisher.Publish(new PromotionPublishRequest(decision, validation, "/tmp/workspace", "git@example.invalid:repo.git"));
+
+        Assert.Equal(PromotionPublishStatus.Failed, result.Status);
+        Assert.False(result.Succeeded);
+        Assert.Equal(PublishFailureCode.CredentialUnavailable, Assert.Single(result.Failures).Code);
+        Assert.Empty(git.Commands);
+    }
+
+    [Fact]
+    public void Publish_RunsGitWithExplicitCredentialEnvironment()
+    {
+        var git = new RecordingGitCommandRunner(new GitCommandResult(0, string.Empty, string.Empty));
+        var decision = Decision(validateOnly: false, targetBranch: "task/1424-live-publisher", expectedHead: Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        var validation = ValidatedWorkflowResult(decision.ExpectedHeadCommit, "refs/den-publish/submissions/sub_live_001");
+        var publisher = new GitPromotionPublisher(git, GitPromotionCredentialPolicy.ExplicitSshCommand("ssh -i /run/den-publish/id_ed25519 -o IdentitiesOnly=yes"));
+
+        var result = publisher.Publish(new PromotionPublishRequest(decision, validation, "/tmp/workspace", "git@example.invalid:repo.git"));
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("ssh -i /run/den-publish/id_ed25519 -o IdentitiesOnly=yes", git.Environments.Single()["GIT_SSH_COMMAND"]);
+        Assert.Equal("0", git.Environments.Single()["GIT_TERMINAL_PROMPT"]);
+    }
+
     private sealed class RecordingGitCommandRunner(params GitCommandResult[] results) : IGitCommandRunner
     {
         private int _index;
         public List<IReadOnlyList<string>> Commands { get; } = [];
+        public List<IReadOnlyDictionary<string, string>> Environments { get; } = [];
 
-        public GitCommandResult Run(IReadOnlyList<string> arguments)
+        public GitCommandResult Run(IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null)
         {
             Commands.Add(arguments.ToArray());
+            Environments.Add(environment ?? new Dictionary<string, string>());
             return results[Math.Min(_index++, results.Length - 1)];
         }
     }
