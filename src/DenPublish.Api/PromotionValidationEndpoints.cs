@@ -212,7 +212,10 @@ public static class PromotionValidationEndpoints
             ReviewRoundId: request.Decision.ReviewRoundId,
             ScopeOverrideIds: request.Decision.ScopeOverrideIds,
             ValidateOnly: request.Decision.ValidateOnly,
-            CreatedAt: request.Decision.CreatedAt);
+            CreatedAt: request.Decision.CreatedAt,
+            ScopeOverrides: request.Decision.ScopeOverrides
+                .Select(scopeOverride => new PublishScopeOverride(scopeOverride.OverrideId, scopeOverride.Reason, scopeOverride.ApprovedBy))
+                .ToArray());
 
         CodeSubmission? submission = null;
         if (request.Submission is not null)
@@ -380,7 +383,16 @@ public sealed record PublishDecisionApiModel(
     int ReviewRoundId,
     IReadOnlyList<string> ScopeOverrideIds,
     bool ValidateOnly,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    IReadOnlyList<PublishScopeOverrideApiModel>? ScopeOverrides = null)
+{
+    public IReadOnlyList<PublishScopeOverrideApiModel> ScopeOverrides { get; init; } = ScopeOverrides ?? [];
+}
+
+public sealed record PublishScopeOverrideApiModel(
+    string OverrideId,
+    string Reason,
+    string ApprovedBy);
 
 public sealed record CodeSubmissionApiModel(
     string SubmissionId,

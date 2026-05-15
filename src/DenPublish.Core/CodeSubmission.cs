@@ -38,6 +38,11 @@ public sealed record PublishReviewState(
     PublishReviewVerdict Verdict,
     IReadOnlyList<PublishReviewFinding> Findings);
 
+public sealed record PublishScopeOverride(
+    string OverrideId,
+    string Reason,
+    string ApprovedBy);
+
 public sealed record CodeSubmission(
     string SubmissionId,
     string ProjectId,
@@ -77,4 +82,5 @@ public sealed record PublishDecision(
     int ReviewRoundId,
     IReadOnlyList<string> ScopeOverrideIds,
     bool ValidateOnly,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    IReadOnlyList<PublishScopeOverride> ScopeOverrides = null!);

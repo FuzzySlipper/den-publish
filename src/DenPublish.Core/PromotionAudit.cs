@@ -32,6 +32,12 @@ public sealed record PromotionAuditAppendResult(bool Succeeded, string ErrorMess
         => new(false, errorMessage);
 }
 
+public sealed record PromotionAuditScopeOverride(
+    string OverrideId,
+    string FindingId,
+    string Reason,
+    string ApprovedBy);
+
 public sealed record PromotionAuditRecord(
     DateTimeOffset RecordedAt,
     string DecisionId,
@@ -43,7 +49,8 @@ public sealed record PromotionAuditRecord(
     IReadOnlyList<string> Decisions,
     IReadOnlyList<ValidationFailure> Failures,
     string? LocalRef,
-    GitSha? FetchedHeadCommit);
+    GitSha? FetchedHeadCommit,
+    IReadOnlyList<PromotionAuditScopeOverride> ScopeOverrides = null!);
 
 public sealed class AuditedPromotionValidationWorkflow(
     IPromotionValidationWorkflow inner,
@@ -153,7 +160,35 @@ public sealed class AuditedPromotionValidationWorkflow(
             Decisions: result.Validation.Decisions,
             Failures: result.Validation.Failures,
             LocalRef: result.LocalRef,
-            FetchedHeadCommit: result.FetchedHeadCommit);
+            FetchedHeadCommit: result.FetchedHeadCommit,
+            ScopeOverrides: CollectUsedScopeOverrides(request));
+
+    private static IReadOnlyList<PromotionAuditScopeOverride> CollectUsedScopeOverrides(PromotionValidationRequest request)
+    {
+        if (request.Submission?.Review is null || request.Decision.ScopeOverrides is null)
+        {
+            return [];
+        }
+
+        return request.Submission.Review.Findings
+            .Where(finding => finding.Blocking && !finding.Resolved && !string.IsNullOrWhiteSpace(finding.OverrideId))
+            .Select(finding => new
+            {
+                Finding = finding,
+                Override = request.Decision.ScopeOverrides.FirstOrDefault(scopeOverride =>
+                    string.Equals(scopeOverride.OverrideId, finding.OverrideId, StringComparison.Ordinal)
+                    && !string.IsNullOrWhiteSpace(scopeOverride.Reason)
+                    && !string.IsNullOrWhiteSpace(scopeOverride.ApprovedBy))
+            })
+            .Where(item => item.Override is not null
+                && request.Decision.ScopeOverrideIds.Contains(item.Override.OverrideId, StringComparer.Ordinal))
+            .Select(item => new PromotionAuditScopeOverride(
+                item.Override!.OverrideId,
+                item.Finding.FindingId,
+                item.Override.Reason,
+                item.Override.ApprovedBy))
+            .ToArray();
+    }
 }
 
 public sealed class FilePromotionAuditStore(string auditFilePath) : IPromotionAuditStore

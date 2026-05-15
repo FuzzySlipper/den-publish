@@ -61,7 +61,7 @@ public sealed class PublishValidationEngine : IPublishEngine
         }
 
         var uncoveredBlockingFindings = submission.Review.Findings
-            .Where(finding => finding.Blocking && !finding.Resolved && !IsCoveredByOverride(decision, finding))
+            .Where(finding => finding.Blocking && !finding.Resolved && FindCoveredOverride(decision, finding) is null)
             .ToArray();
         if (uncoveredBlockingFindings.Length > 0)
         {
@@ -89,8 +89,10 @@ public sealed class PublishValidationEngine : IPublishEngine
         ];
 
         decisions.AddRange(submission.Review.Findings
-            .Where(finding => finding.Blocking && !finding.Resolved && IsCoveredByOverride(decision, finding))
-            .Select(finding => $"blocking finding {finding.FindingId} covered by approved override {finding.OverrideId}"));
+            .Where(finding => finding.Blocking && !finding.Resolved)
+            .Select(finding => new { Finding = finding, Override = FindCoveredOverride(decision, finding) })
+            .Where(item => item.Override is not null)
+            .Select(item => $"blocking finding {item.Finding.FindingId} covered by approved override {item.Override!.OverrideId}: {item.Override.Reason}"));
 
         if (decision.ValidateOnly)
         {
@@ -100,9 +102,19 @@ public sealed class PublishValidationEngine : IPublishEngine
         return PublishValidationResult.Approved("publish decision validated against Den submission contract", decisions);
     }
 
-    private static bool IsCoveredByOverride(PublishDecision decision, PublishReviewFinding finding)
-        => !string.IsNullOrWhiteSpace(finding.OverrideId)
-            && decision.ScopeOverrideIds.Contains(finding.OverrideId, StringComparer.Ordinal);
+    private static PublishScopeOverride? FindCoveredOverride(PublishDecision decision, PublishReviewFinding finding)
+    {
+        if (string.IsNullOrWhiteSpace(finding.OverrideId)
+            || !decision.ScopeOverrideIds.Contains(finding.OverrideId, StringComparer.Ordinal))
+        {
+            return null;
+        }
+
+        return decision.ScopeOverrides?.FirstOrDefault(scopeOverride =>
+            string.Equals(scopeOverride.OverrideId, finding.OverrideId, StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(scopeOverride.Reason)
+            && !string.IsNullOrWhiteSpace(scopeOverride.ApprovedBy));
+    }
 
     private static bool DecisionMatchesSubmission(PublishDecision decision, CodeSubmission submission)
         => string.Equals(decision.SubmissionId, submission.SubmissionId, StringComparison.Ordinal)

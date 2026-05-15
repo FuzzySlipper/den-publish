@@ -133,6 +133,38 @@ public sealed class PromotionAuditTests
         Assert.Empty(audit.Records);
     }
 
+
+    [Fact]
+    public void Validate_RecordsUsedScopeOverrideReasons()
+    {
+        var decision = Decision(
+            scopeOverrideIds: ["override_scope_1"],
+            scopeOverrides: [new PublishScopeOverride("override_scope_1", "Generated file outside normal prefix after tool regeneration", "planner")]);
+        var submission = ApprovedSubmission(review: new PublishReviewState(
+            680,
+            PublishReviewVerdict.LooksGood,
+            [new PublishReviewFinding("finding_1", Blocking: true, Resolved: false, OverrideId: "override_scope_1")]));
+        var innerResult = new PromotionValidationWorkflowResult(
+            PublishValidationResult.Approved("workflow ok", ["override accepted"]),
+            LocalRef: "refs/den-publish/submissions/sub_1424_001",
+            FetchedHeadCommit: submission.HeadCommit);
+        var audit = new RecordingAuditStore(PromotionAuditAppendResult.Appended());
+        var workflow = new AuditedPromotionValidationWorkflow(
+            new RecordingPromotionWorkflow(innerResult),
+            audit,
+            () => DateTimeOffset.Parse("2026-05-14T20:40:00Z"));
+
+        var result = workflow.Validate(new PromotionValidationRequest(decision, submission, "/workspace", new ChangedFileScopePolicy(["src/DenChannels/"])));
+
+        Assert.True(result.IsPublishable);
+        var record = Assert.Single(audit.Records);
+        var recordedOverride = Assert.Single(record.ScopeOverrides);
+        Assert.Equal("override_scope_1", recordedOverride.OverrideId);
+        Assert.Equal("finding_1", recordedOverride.FindingId);
+        Assert.Equal("Generated file outside normal prefix after tool regeneration", recordedOverride.Reason);
+        Assert.Equal("planner", recordedOverride.ApprovedBy);
+    }
+
     [Fact]
     public void FileAuditStore_AppendsJsonLineAndCreatesParentDirectory()
     {
@@ -149,7 +181,8 @@ public sealed class PromotionAuditTests
             Decisions: ["all checks passed"],
             Failures: [],
             LocalRef: "refs/den-publish/submissions/sub_1424_001",
-            FetchedHeadCommit: Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+            FetchedHeadCommit: Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+            ScopeOverrides: [new PromotionAuditScopeOverride("override_scope_1", "finding_1", "Generated file outside normal prefix after tool regeneration", "planner")]);
 
         var result = store.Append(record);
 
@@ -160,6 +193,11 @@ public sealed class PromotionAuditTests
         Assert.Equal("sub_1424_001", doc.RootElement.GetProperty("submission_id").GetString());
         Assert.Equal("validated", doc.RootElement.GetProperty("status").GetString());
         Assert.Equal("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", doc.RootElement.GetProperty("fetched_head_commit").GetString());
+        var overrideJson = Assert.Single(doc.RootElement.GetProperty("scope_overrides").EnumerateArray());
+        Assert.Equal("override_scope_1", overrideJson.GetProperty("override_id").GetString());
+        Assert.Equal("finding_1", overrideJson.GetProperty("finding_id").GetString());
+        Assert.Equal("Generated file outside normal prefix after tool regeneration", overrideJson.GetProperty("reason").GetString());
+        Assert.Equal("planner", overrideJson.GetProperty("approved_by").GetString());
 
         var lookup = store.FindByDecisionId("pub_1424_001");
         Assert.True(lookup.Succeeded);
@@ -198,7 +236,9 @@ public sealed class PromotionAuditTests
         }
     }
 
-    private static PublishDecision Decision()
+    private static PublishDecision Decision(
+        IReadOnlyList<string>? scopeOverrideIds = null,
+        IReadOnlyList<PublishScopeOverride>? scopeOverrides = null)
         => new(
             DecisionId: "pub_1424_001",
             ProjectId: "den-channels",
@@ -211,11 +251,12 @@ public sealed class PromotionAuditTests
             ExpectedHeadCommit: Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
             ExpectedBaseBranch: "main",
             ReviewRoundId: 680,
-            ScopeOverrideIds: [],
+            ScopeOverrideIds: scopeOverrideIds ?? [],
             ValidateOnly: true,
-            CreatedAt: DateTimeOffset.Parse("2026-05-14T20:05:00Z"));
+            CreatedAt: DateTimeOffset.Parse("2026-05-14T20:05:00Z"),
+            ScopeOverrides: scopeOverrides ?? []);
 
-    private static CodeSubmission ApprovedSubmission()
+    private static CodeSubmission ApprovedSubmission(PublishReviewState? review = null)
         => new(
             SubmissionId: "sub_1424_001",
             ProjectId: "den-channels",
@@ -238,7 +279,8 @@ public sealed class PromotionAuditTests
             ChangedFilesClaim: ["src/DenChannels/Bridge.cs"],
             TestsRun: ["dotnet test --no-restore: passed"],
             Status: CodeSubmissionStatus.Approved,
-            CreatedAt: DateTimeOffset.Parse("2026-05-14T20:00:00Z"));
+            CreatedAt: DateTimeOffset.Parse("2026-05-14T20:00:00Z"),
+            Review: review ?? new PublishReviewState(680, PublishReviewVerdict.LooksGood, []));
 
     private static GitSha Sha(string value)
     {

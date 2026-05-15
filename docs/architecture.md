@@ -262,3 +262,13 @@ Live Git publishing no longer accepts ambient Git or SSH credentials from the se
 The first supported production policy is `DenPublish:Publishing:CredentialMode=ssh_command` plus a redacted `DenPublish:Publishing:GitSshCommand`. The command is passed only to the child `git push` process as `GIT_SSH_COMMAND`; `GIT_TERMINAL_PROMPT=0` is also set so the service cannot hang or fall back to interactive prompts. `/config/status` reports only the mode and a fingerprint, never the command value.
 
 This keeps future credential placement deliberate and prevents accidental use of random `agent` account SSH configuration.
+
+
+## Scope override reasons and audit
+
+Scope overrides are now structured publish-decision data, not bare ids. A decision can only cover an unresolved blocking review finding when both conditions hold:
+
+- the finding declares an override id and that id appears in `decision.scope_override_ids`;
+- the decision also includes a matching structured `scope_overrides[]` entry with non-empty `reason` and `approved_by`.
+
+Validation records a human-readable decision trace containing the override reason. Audit JSONL records the used overrides as `scope_overrides[]` entries with `override_id`, `finding_id`, `reason`, and `approved_by`, so replay and later operator review can explain why the blocker was allowed through. Bare override ids without reasons fail closed as unresolved blocking findings.

@@ -125,8 +125,9 @@ public sealed class PublishValidationEngineTests
         Assert.Equal(PublishFailureCode.UnresolvedBlockingFindings, failure.Code);
     }
 
+
     [Fact]
-    public void Validate_AcceptsUnresolvedBlockingFindingCoveredByDecisionOverride()
+    public void Validate_RejectsUnresolvedBlockingFindingWhenOverrideReasonMissing()
     {
         var finding = new PublishReviewFinding("finding_1", Blocking: true, Resolved: false, OverrideId: "override_scope_1");
         var submission = ApprovedSubmission(review: ApprovedReview(findings: [finding]));
@@ -135,8 +136,25 @@ public sealed class PublishValidationEngineTests
 
         var result = engine.Validate(decision, submission);
 
+        Assert.False(result.IsPublishable);
+        Assert.Equal(PublishValidationStatus.Rejected, result.Status);
+        var failure = Assert.Single(result.Failures);
+        Assert.Equal(PublishFailureCode.UnresolvedBlockingFindings, failure.Code);
+        Assert.Contains("finding_1", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Validate_AcceptsUnresolvedBlockingFindingCoveredByDecisionOverride()
+    {
+        var finding = new PublishReviewFinding("finding_1", Blocking: true, Resolved: false, OverrideId: "override_scope_1");
+        var submission = ApprovedSubmission(review: ApprovedReview(findings: [finding]));
+        var decision = Decision(scopeOverrideIds: ["override_scope_1"], scopeOverrides: [new PublishScopeOverride("override_scope_1", "Generated file outside normal prefix after tool regeneration", "planner")]);
+        IPublishEngine engine = new PublishValidationEngine();
+
+        var result = engine.Validate(decision, submission);
+
         Assert.True(result.IsPublishable);
-        Assert.Contains("blocking finding finding_1 covered by approved override override_scope_1", result.Decisions);
+        Assert.Contains("blocking finding finding_1 covered by approved override override_scope_1: Generated file outside normal prefix after tool regeneration", result.Decisions);
     }
 
 
@@ -159,7 +177,8 @@ public sealed class PublishValidationEngineTests
         GitSha? expectedHeadCommit = null,
         bool validateOnly = false,
         string submissionId = "sub_1424_001",
-        IReadOnlyList<string>? scopeOverrideIds = null)
+        IReadOnlyList<string>? scopeOverrideIds = null,
+        IReadOnlyList<PublishScopeOverride>? scopeOverrides = null)
         => new(
             DecisionId: "pub_1424_001",
             ProjectId: "den-channels",
@@ -174,7 +193,8 @@ public sealed class PublishValidationEngineTests
             ReviewRoundId: 680,
             ScopeOverrideIds: scopeOverrideIds ?? [],
             ValidateOnly: validateOnly,
-            CreatedAt: DateTimeOffset.Parse("2026-05-14T20:05:00Z"));
+            CreatedAt: DateTimeOffset.Parse("2026-05-14T20:05:00Z"),
+            ScopeOverrides: scopeOverrides ?? []);
 
     private static CodeSubmission ApprovedSubmission(
         GitSha? headCommit = null,

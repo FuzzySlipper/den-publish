@@ -31,6 +31,10 @@ public sealed class PromotionValidationEndpointTests
         Assert.True(finding.Blocking);
         Assert.False(finding.Resolved);
         Assert.Equal("override_scope_1", finding.OverrideId);
+        var scopeOverride = Assert.Single(workflow.CapturedRequest.Decision.ScopeOverrides);
+        Assert.Equal("override_scope_1", scopeOverride.OverrideId);
+        Assert.Equal("Generated file outside normal prefix after tool regeneration", scopeOverride.Reason);
+        Assert.Equal("planner", scopeOverride.ApprovedBy);
         Assert.Equal(["src/DenChannels/"], workflow.CapturedRequest.ScopePolicy.AllowedPathPrefixes);
     }
 
@@ -185,9 +189,10 @@ public sealed class PromotionValidationEndpointTests
                 ExpectedHeadCommit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                 ExpectedBaseBranch: "main",
                 ReviewRoundId: 680,
-                ScopeOverrideIds: [],
+                ScopeOverrideIds: ["override_scope_1"],
                 ValidateOnly: true,
-                CreatedAt: DateTimeOffset.Parse("2026-05-14T20:05:00Z")),
+                CreatedAt: DateTimeOffset.Parse("2026-05-14T20:05:00Z"),
+                ScopeOverrides: [new PublishScopeOverrideApiModel("override_scope_1", "Generated file outside normal prefix after tool regeneration", "planner")]),
             Submission: new CodeSubmissionApiModel(
                 SubmissionId: "sub_1424_001",
                 ProjectId: "den-channels",

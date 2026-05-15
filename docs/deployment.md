@@ -143,3 +143,14 @@ Do not rely on ambient `agent` GitHub credentials for `/promotion/publish`. Live
 The SSH command value is treated as sensitive configuration. It is not included in `/config/status`; the status surface reports only `display=ssh_command` plus a fingerprint for drift checks. The service also sets `GIT_TERMINAL_PROMPT=0` for live `git push` calls.
 
 Credential file placement and canonical live smoke still require a separate explicit approval gate.
+
+
+### Scope override audit requirements
+
+Promotion callers must provide structured override metadata when using scope overrides. Supplying only `scope_override_ids` is not enough for an unresolved blocking finding. Include matching `scope_overrides[]` entries with:
+
+- `override_id`
+- `reason`
+- `approved_by`
+
+The service persists used overrides to the audit JSONL record. This makes exceptional publish decisions explainable during central Den inventory/review and avoids undocumented bypasses.
