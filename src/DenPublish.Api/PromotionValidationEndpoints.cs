@@ -63,6 +63,14 @@ public static class PromotionValidationEndpoints
         ArgumentNullException.ThrowIfNull(publisher);
         ArgumentNullException.ThrowIfNull(workspacePathResolver);
 
+        if (!request.Decision.ValidateOnly)
+        {
+            var liveDecisionFailure = new ValidationFailure(
+                PublishFailureCode.InvalidRequest,
+                "/promotion/dry-run requires decision.validate_only=true; use /promotion/publish for approved live promotions.");
+            return PromotionDryRunApiResponse.FromValidationOnly(MalformedRequestResult(liveDecisionFailure));
+        }
+
         var workspacePath = workspacePathResolver.Resolve(request);
         if (!workspacePath.Succeeded)
         {

@@ -56,6 +56,34 @@ public sealed class PromotionDryRunEndpointTests
         Assert.Null(publisher.CapturedRequest);
     }
 
+
+
+    [Fact]
+    public void ValidateAndDryRun_RejectsLiveDecisionBeforeWorkflowOrPublisher()
+    {
+        var workflow = new RecordingWorkflow(new PromotionValidationWorkflowResult(
+            PublishValidationResult.Approved("workflow ok"),
+            LocalRef: "refs/den-publish/submissions/sub_1424_001",
+            FetchedHeadCommit: Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")));
+        var publisher = new RecordingPublisher(PromotionPublishResult.DryRun("dry-run planned", []));
+        var request = Request() with
+        {
+            Decision = Request().Decision with { ValidateOnly = false }
+        };
+
+        var response = PromotionValidationEndpoints.ValidateAndDryRun(request, workflow, publisher);
+
+        Assert.False(response.Succeeded);
+        Assert.Equal("rejected", response.PublishStatus);
+        Assert.Equal("promotion validation request is malformed", response.PublishSummary);
+        Assert.Equal("invalid_request", Assert.Single(response.PublishFailures).Code);
+        Assert.Contains("/promotion/dry-run requires decision.validate_only=true", response.PublishFailures[0].Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(response.PlannedCommands);
+        Assert.False(response.Validation.IsPublishable);
+        Assert.Null(workflow.CapturedRequest);
+        Assert.Null(publisher.CapturedRequest);
+    }
+
     [Fact]
     public void ValidateAndDryRun_DoesNotCallPublisherWhenValidationRejects()
     {

@@ -101,3 +101,5 @@ Leave runtime/audit/workspace data intact unless cleanup is explicitly approved.
 ## Live publish gate
 
 Canonical push credentials and live canonical pushes require separate explicit approval. Before that gate, the service should only be used for validate-only and dry-run planning.
+
+The `/promotion/dry-run` endpoint rejects `decision.validate_only=false` before validation/fetch/audit/publisher execution. A future live-publish rollout must use a separate explicit publish endpoint and must not reuse the dry-run endpoint for credential-backed pushes.

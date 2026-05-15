@@ -221,3 +221,10 @@ For developer/test use without `DenPublish:WorkspaceRoot`, the API still support
 
 This removes the last known per-project/per-submission filesystem shim from validate-only operation: callers provide Den/code-gate metadata; `den-publish` creates and owns its local Git workspace state. Directory preparation and `git init` failures fail closed as `CodeGateFetchFailed` before any promotion planning.
 
+
+
+## Dry-run endpoint live-decision guard
+
+`/promotion/dry-run` is a validate-only endpoint. It now rejects requests where `decision.validate_only` is `false` before resolving a workspace, calling the validation workflow, fetching code-gate refs, appending audit records, or invoking a publisher. This preserves the endpoint contract if a future credential-backed publisher is registered: dry-run requests cannot accidentally become live pushes.
+
+Live promotion must use a separate explicit endpoint (for example `/promotion/publish`) with its own credential, policy, audit, and rollback gate.
