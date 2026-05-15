@@ -96,6 +96,32 @@ public sealed class PublishPolicyValidationEngineTests
         Assert.Equal(PublishFailureCode.ScopeViolation, failure.Code);
     }
 
+
+    [Fact]
+    public void Validate_UsesProjectSpecificCanonicalRemotePolicy()
+    {
+        var globalPolicy = new PublishTargetPolicy(
+            TargetRemoteName: "canonical",
+            CanonicalRemoteUrl: "git@github.com:FuzzySlipper/den-publish.git",
+            PushBranchPrefixes: ["task/"],
+            FastForwardBranches: ["main"],
+            ProjectPolicies: new Dictionary<string, ProjectPublishTargetPolicy>
+            {
+                ["den-channels"] = new(
+                    ProjectId: "den-channels",
+                    TargetRemoteName: null,
+                    CanonicalRemoteUrl: "git@github.com:FuzzySlipper/den-channels.git",
+                    PushBranchPrefixes: ["task/"],
+                    FastForwardBranches: ["main"])
+            });
+        IPublishEngine engine = new PublishPolicyValidationEngine(new PublishValidationEngine(), globalPolicy);
+
+        var result = engine.Validate(Decision(), ApprovedSubmission());
+
+        Assert.True(result.IsPublishable);
+        Assert.Contains("target remote matches configured canonical remote (project:den-channels)", result.Decisions);
+    }
+
     private static PublishTargetPolicy Policy()
         => new(
             TargetRemoteName: "canonical",

@@ -79,7 +79,8 @@ Later slices can add workspace object fetch, scope diff validation, fast-forward
 
 The policy boundary is:
 
-- `PublishTargetPolicy.TargetRemoteName` and `CanonicalRemoteUrl` define the only configured canonical target accepted for this project.
+- `PublishTargetPolicy.TargetRemoteName` and `CanonicalRemoteUrl` define the global/default canonical target accepted by the service.
+- `DenPublish:Projects:<projectId>` entries can override target remote name, canonical remote URL, push-branch prefixes, fast-forward branches, code-gate remote URL, and service-side code-gate SSH command for each project.
 - `PushBranchPrefixes` allows safe task-branch publication such as `task/...` for `PushBranch` decisions.
 - `FastForwardBranches` explicitly lists protected branches such as `main` that may be fast-forwarded by `FastForwardMain` decisions.
 - Target branch names must pass a conservative Git branch safety check before they are used in service-owned argv-based Git commands.
@@ -165,8 +166,8 @@ API/DI behavior:
 
 - Request parsing rejects malformed Git SHAs, unsupported publish operations, and unsupported submission statuses before invoking the workflow.
 - The endpoint returns `200 OK` for publishable validate-only results and `400 Bad Request` for rejected/failed validation results.
-- `AddDenPublishValidation` wires the Core workflow using process-backed Git primitives, target policy from `DenPublish:TargetPolicy`, and a file-backed audit store at `DenPublish:AuditFilePath`.
-- Target policy defaults fail closed for real canonical promotion unless `DenPublish:TargetPolicy:CanonicalRemoteUrl` is configured.
+- `AddDenPublishValidation` wires the Core workflow using process-backed Git primitives, global policy from `DenPublish:TargetPolicy`, project overrides from `DenPublish:Projects`, project-aware code-gate access routing, and a file-backed audit store at `DenPublish:AuditFilePath`.
+- Target policy defaults fail closed for real canonical promotion unless either `DenPublish:TargetPolicy:CanonicalRemoteUrl` or the matching `DenPublish:Projects:<projectId>:CanonicalRemoteUrl` is configured.
 
 This slice is endpoint/service wiring only. It does not deploy or restart a service, and it does not add canonical push credentials or perform live publishing.
 
@@ -272,3 +273,16 @@ Scope overrides are now structured publish-decision data, not bare ids. A decisi
 - the decision also includes a matching structured `scopeOverrides[]` entry with non-empty `reason` and `approvedBy`.
 
 Validation records a human-readable decision trace containing the override reason. Audit JSONL records the used overrides as `scope_overrides[]` entries with `override_id`, `finding_id`, `reason`, and `approved_by`, so replay and later operator review can explain why the blocker was allowed through. Bare override ids without reasons fail closed as unresolved blocking findings.
+
+
+## Project-aware runtime policy and code-gate read routing
+
+`den-publish` can now keep one persistent service boundary while validating multiple projects. The project registry is supplied through configuration under `DenPublish:Projects:<projectId>`:
+
+- `CanonicalRemoteUrl` — expected canonical repository for decisions/submissions in that project.
+- `TargetRemoteName` — optional remote alias, defaulting to the global policy value such as `canonical`.
+- `PushBranchPrefixes` and `FastForwardBranches` — optional per-project promotion branch policy.
+- `CodeGateRemoteUrl` — expected code-gate remote URL for immutable submission refs.
+- `CodeGateGitSshCommand` — optional service-side read credential command passed only to child `git ls-remote` / `git fetch` calls as `GIT_SSH_COMMAND`; the service also sets `GIT_TERMINAL_PROMPT=0`.
+
+If a project policy defines `CodeGateRemoteUrl`, submissions claiming a different code-gate URL fail closed before fetch. The runtime config status endpoint reports project policy and credential fingerprints without returning raw SSH command values. This removes the need for per-project foreground service processes while keeping workers away from credential material.

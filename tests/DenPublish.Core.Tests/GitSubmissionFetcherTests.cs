@@ -27,6 +27,52 @@ public sealed class GitSubmissionFetcherTests
     }
 
     [Fact]
+    public void Fetch_UsesProjectCodeGateCredentialEnvironment()
+    {
+        var submission = ApprovedSubmission();
+        var runner = new RecordingGitCommandRunner(
+            new GitCommandResult(0, string.Empty, string.Empty),
+            new GitCommandResult(0, string.Empty, string.Empty),
+            new GitCommandResult(0, $"{submission.HeadCommit.Value}\n", string.Empty));
+        var provider = new ConfiguredCodeGateAccessPolicyProvider(new Dictionary<string, CodeGateProjectAccessPolicy>
+        {
+            ["den-channels"] = new(
+                ProjectId: "den-channels",
+                CodeGateRemoteUrl: submission.CodeGateRemoteUrl,
+                GitSshCommand: "ssh -F /dev/null -i /runtime/den-channels-codegate")
+        });
+        ISubmissionFetcher fetcher = new GitSubmissionFetcher(runner, new RecordingWorkspaceDirectoryPreparer(), provider);
+
+        var result = fetcher.Fetch(submission, "/workspace");
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("ssh -F /dev/null -i /runtime/den-channels-codegate", runner.Environments[1]!["GIT_SSH_COMMAND"]);
+        Assert.Equal("0", runner.Environments[1]!["GIT_TERMINAL_PROMPT"]);
+    }
+
+    [Fact]
+    public void Fetch_RejectsCodeGateRemoteMismatchBeforeGitCommands()
+    {
+        var submission = ApprovedSubmission() with { CodeGateRemoteUrl = "ssh://git@192.168.1.10:3022/evil/evil.git" };
+        var runner = new RecordingGitCommandRunner();
+        var provider = new ConfiguredCodeGateAccessPolicyProvider(new Dictionary<string, CodeGateProjectAccessPolicy>
+        {
+            ["den-channels"] = new(
+                ProjectId: "den-channels",
+                CodeGateRemoteUrl: "ssh://git@192.168.1.10:3022/den-channels/den-channels.git",
+                GitSshCommand: null)
+        });
+        ISubmissionFetcher fetcher = new GitSubmissionFetcher(runner, new RecordingWorkspaceDirectoryPreparer(), provider);
+
+        var result = fetcher.Fetch(submission, "/workspace");
+
+        Assert.False(result.Succeeded);
+        Assert.NotNull(result.Failure);
+        Assert.Equal(PublishFailureCode.InvalidRequest, result.Failure.Code);
+        Assert.Empty(runner.Commands);
+    }
+
+    [Fact]
     public void Fetch_VerifiesLocalObjectSha()
     {
         var submission = ApprovedSubmission();
@@ -149,10 +195,12 @@ public sealed class GitSubmissionFetcherTests
         private int _index;
 
         public List<IReadOnlyList<string>> Commands { get; } = [];
+        public List<IReadOnlyDictionary<string, string>?> Environments { get; } = [];
 
         public GitCommandResult Run(IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null)
         {
             Commands.Add(arguments.ToArray());
+            Environments.Add(environment);
             return results[_index++];
         }
     }

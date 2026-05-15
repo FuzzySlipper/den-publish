@@ -33,7 +33,7 @@ public sealed class CodeGatePublishValidationEngine(IPublishEngine contractValid
                 "failed to resolve immutable code-gate submission ref",
                 new ValidationFailure(
                     PublishFailureCode.CodeGateFetchFailed,
-                    $"Could not resolve {submission.IngressRef} from {submission.CodeGateRemoteUrl}: {refResolution.ErrorMessage}"));
+                    $"Could not resolve {submission.IngressRef} from configured code-gate remote for project '{submission.ProjectId}': {refResolution.ErrorMessage}"));
         }
 
         if (refResolution.HeadCommit != submission.HeadCommit || refResolution.HeadCommit != decision.ExpectedHeadCommit)
@@ -62,18 +62,28 @@ public interface IGitCommandRunner
 
 public sealed record GitCommandResult(int ExitCode, string StandardOutput, string StandardError);
 
-public sealed class GitLsRemoteCodeGateRefResolver(IGitCommandRunner commandRunner) : ICodeGateRefResolver
+public sealed class GitLsRemoteCodeGateRefResolver(
+    IGitCommandRunner commandRunner,
+    ICodeGateAccessPolicyProvider? accessPolicyProvider = null) : ICodeGateRefResolver
 {
+    private readonly ICodeGateAccessPolicyProvider _accessPolicyProvider = accessPolicyProvider ?? SubmissionCodeGateAccessPolicyProvider.Instance;
+
     public CodeGateRefResolution ResolveHead(CodeSubmission submission)
     {
         ArgumentNullException.ThrowIfNull(submission);
 
+        var access = _accessPolicyProvider.Resolve(submission);
+        if (!access.Succeeded)
+        {
+            return CodeGateRefResolution.Failed(access.Failure?.Message ?? "code-gate access policy rejected the submission.");
+        }
+
         var result = commandRunner.Run([
             "ls-remote",
             "--exit-code",
-            submission.CodeGateRemoteUrl,
+            access.RemoteUrl,
             submission.IngressRef
-        ]);
+        ], access.Environment);
 
         if (result.ExitCode != 0)
         {

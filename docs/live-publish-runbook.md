@@ -22,7 +22,7 @@ curl -fsS http://127.0.0.1:5090/readyz
 curl -fsS http://127.0.0.1:5090/config/status
 ```
 
-`/config/status` must report `configurationContract=den-publish-runtime-config-v1`, `livePublishing.enabled=false`, and `liveCredentialPolicy.configured=false` before this runbook starts.
+`/config/status` must report `configurationContract=den-publish-runtime-config-v2`, `livePublishing.enabled=false`, and `liveCredentialPolicy.configured=false` before this runbook starts.
 
 ## Approval required
 

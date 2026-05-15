@@ -15,9 +15,10 @@ public sealed class DenPublishRuntimeConfigurationStatusProvider(IConfiguration 
     {
         var workspaceRoot = ReadPlainSetting("DenPublish:WorkspaceRoot", "DenPublish__WorkspaceRoot", requiredForProduction: true);
         var auditFilePath = ReadPlainSetting("DenPublish:AuditFilePath", "DenPublish__AuditFilePath", requiredForProduction: true);
-        var canonicalRemoteUrl = ReadRedactedSetting("DenPublish:TargetPolicy:CanonicalRemoteUrl", "DenPublish__TargetPolicy__CanonicalRemoteUrl", requiredForProduction: true);
+        var canonicalRemoteUrl = ReadRedactedSetting("DenPublish:TargetPolicy:CanonicalRemoteUrl", "DenPublish__TargetPolicy__CanonicalRemoteUrl", requiredForProduction: false);
         var livePublishing = ReadBooleanSetting("DenPublish:Publishing:Enabled", "DenPublish__Publishing__Enabled");
         var liveCredentialPolicy = ReadCredentialPolicySetting();
+        var projectPolicies = ReadProjectPolicies();
 
         var warnings = new List<DenPublishRuntimeConfigurationWarning>();
         if (!workspaceRoot.Configured)
@@ -34,11 +35,28 @@ public sealed class DenPublishRuntimeConfigurationStatusProvider(IConfiguration 
                 "DenPublish:AuditFilePath is not configured; durable audit persistence should be explicit for production."));
         }
 
-        if (!canonicalRemoteUrl.Configured)
+        if (!canonicalRemoteUrl.Configured && projectPolicies.Count == 0)
         {
             warnings.Add(new DenPublishRuntimeConfigurationWarning(
                 "canonical_remote_url_missing",
-                "DenPublish:TargetPolicy:CanonicalRemoteUrl is not configured; publish target policy cannot verify canonical remotes."));
+                "No global or project-specific canonical remote policy is configured; publish target policy cannot verify canonical remotes."));
+        }
+
+        foreach (var projectPolicy in projectPolicies)
+        {
+            if (!projectPolicy.CanonicalRemoteUrl.Configured)
+            {
+                warnings.Add(new DenPublishRuntimeConfigurationWarning(
+                    "project_canonical_remote_missing",
+                    $"Project '{projectPolicy.ProjectId}' has no CanonicalRemoteUrl configured."));
+            }
+
+            if (!projectPolicy.CodeGateRemoteUrl.Configured)
+            {
+                warnings.Add(new DenPublishRuntimeConfigurationWarning(
+                    "project_code_gate_remote_missing",
+                    $"Project '{projectPolicy.ProjectId}' has no CodeGateRemoteUrl configured."));
+            }
         }
 
         if (livePublishing.Enabled)
@@ -57,13 +75,51 @@ public sealed class DenPublishRuntimeConfigurationStatusProvider(IConfiguration 
 
         return new DenPublishRuntimeConfigurationStatus(
             Service: "den-publish",
-            ConfigurationContract: "den-publish-runtime-config-v1",
+            ConfigurationContract: "den-publish-runtime-config-v2",
             WorkspaceRoot: workspaceRoot,
             AuditFilePath: auditFilePath,
             CanonicalRemoteUrl: canonicalRemoteUrl,
+            ProjectPolicies: projectPolicies,
             LivePublishing: livePublishing,
             LiveCredentialPolicy: liveCredentialPolicy,
             Warnings: warnings);
+    }
+
+    private IReadOnlyList<DenPublishProjectRuntimePolicy> ReadProjectPolicies()
+    {
+        var result = new List<DenPublishProjectRuntimePolicy>();
+        foreach (var child in configuration.GetSection("DenPublish:Projects").GetChildren().OrderBy(section => section.Key, StringComparer.Ordinal))
+        {
+            var sectionKey = child.Key;
+            var projectId = child["ProjectId"] ?? sectionKey;
+            if (string.IsNullOrWhiteSpace(projectId))
+            {
+                continue;
+            }
+
+            result.Add(new DenPublishProjectRuntimePolicy(
+                ProjectId: projectId,
+                TargetRemoteName: PlainSettingFromValue(
+                    $"DenPublish:Projects:{sectionKey}:TargetRemoteName",
+                    $"DenPublish__Projects__{sectionKey}__TargetRemoteName",
+                    child["TargetRemoteName"] ?? "canonical",
+                    requiredForProduction: true),
+                CanonicalRemoteUrl: RedactedSettingFromValue(
+                    $"DenPublish:Projects:{sectionKey}:CanonicalRemoteUrl",
+                    $"DenPublish__Projects__{sectionKey}__CanonicalRemoteUrl",
+                    child["CanonicalRemoteUrl"],
+                    requiredForProduction: true),
+                CodeGateRemoteUrl: RedactedSettingFromValue(
+                    $"DenPublish:Projects:{sectionKey}:CodeGateRemoteUrl",
+                    $"DenPublish__Projects__{sectionKey}__CodeGateRemoteUrl",
+                    child["CodeGateRemoteUrl"],
+                    requiredForProduction: true),
+                CodeGateReadCredential: ReadCodeGateCredentialPolicySetting(projectId, sectionKey, child),
+                PushBranchPrefixes: child.GetSection("PushBranchPrefixes").Get<string[]>() ?? [],
+                FastForwardBranches: child.GetSection("FastForwardBranches").Get<string[]>() ?? []));
+        }
+
+        return result;
     }
 
     private DenPublishRuntimeConfigurationSetting ReadPlainSetting(string key, string environmentKey, bool requiredForProduction)
@@ -75,12 +131,17 @@ public sealed class DenPublishRuntimeConfigurationStatusProvider(IConfiguration 
     }
 
     private DenPublishRuntimeConfigurationSetting ReadRedactedSetting(string key, string environmentKey, bool requiredForProduction)
-    {
-        var value = configuration[key];
-        return string.IsNullOrWhiteSpace(value)
+        => RedactedSettingFromValue(key, environmentKey, configuration[key], requiredForProduction);
+
+    private static DenPublishRuntimeConfigurationSetting PlainSettingFromValue(string key, string environmentKey, string? value, bool requiredForProduction)
+        => string.IsNullOrWhiteSpace(value)
+            ? DenPublishRuntimeConfigurationSetting.Missing(key, environmentKey, requiredForProduction)
+            : DenPublishRuntimeConfigurationSetting.Plain(key, environmentKey, value, requiredForProduction);
+
+    private static DenPublishRuntimeConfigurationSetting RedactedSettingFromValue(string key, string environmentKey, string? value, bool requiredForProduction)
+        => string.IsNullOrWhiteSpace(value)
             ? DenPublishRuntimeConfigurationSetting.Missing(key, environmentKey, requiredForProduction)
             : DenPublishRuntimeConfigurationSetting.Redacted(key, environmentKey, DisplayRemoteWithoutCredentials(value), Fingerprint(value), requiredForProduction);
-    }
 
     private DenPublishRuntimeConfigurationSetting ReadCredentialPolicySetting()
     {
@@ -107,6 +168,25 @@ public sealed class DenPublishRuntimeConfigurationStatusProvider(IConfiguration 
             "DenPublish__Publishing__GitSshCommand",
             display: "ssh_command",
             fingerprint: Fingerprint($"ssh_command:{command}"),
+            requiredForProduction: false);
+    }
+
+    private static DenPublishRuntimeConfigurationSetting ReadCodeGateCredentialPolicySetting(string projectId, string sectionKey, IConfigurationSection section)
+    {
+        var command = section["CodeGateGitSshCommand"];
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            return DenPublishRuntimeConfigurationSetting.Missing(
+                $"DenPublish:Projects:{sectionKey}:CodeGateGitSshCommand",
+                $"DenPublish__Projects__{sectionKey}__CodeGateGitSshCommand",
+                requiredForProduction: false);
+        }
+
+        return DenPublishRuntimeConfigurationSetting.Redacted(
+            $"DenPublish:Projects:{sectionKey}:CodeGateGitSshCommand",
+            $"DenPublish__Projects__{sectionKey}__CodeGateGitSshCommand",
+            display: "ssh_command",
+            fingerprint: Fingerprint($"code_gate_ssh_command:{command}"),
             requiredForProduction: false);
     }
 
@@ -156,9 +236,19 @@ public sealed record DenPublishRuntimeConfigurationStatus(
     DenPublishRuntimeConfigurationSetting WorkspaceRoot,
     DenPublishRuntimeConfigurationSetting AuditFilePath,
     DenPublishRuntimeConfigurationSetting CanonicalRemoteUrl,
+    IReadOnlyList<DenPublishProjectRuntimePolicy> ProjectPolicies,
     DenPublishRuntimeBooleanSetting LivePublishing,
     DenPublishRuntimeConfigurationSetting LiveCredentialPolicy,
     IReadOnlyList<DenPublishRuntimeConfigurationWarning> Warnings);
+
+public sealed record DenPublishProjectRuntimePolicy(
+    string ProjectId,
+    DenPublishRuntimeConfigurationSetting TargetRemoteName,
+    DenPublishRuntimeConfigurationSetting CanonicalRemoteUrl,
+    DenPublishRuntimeConfigurationSetting CodeGateRemoteUrl,
+    DenPublishRuntimeConfigurationSetting CodeGateReadCredential,
+    IReadOnlyList<string> PushBranchPrefixes,
+    IReadOnlyList<string> FastForwardBranches);
 
 public sealed record DenPublishRuntimeConfigurationSetting(
     string Key,

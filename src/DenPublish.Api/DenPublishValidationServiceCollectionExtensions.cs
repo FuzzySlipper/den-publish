@@ -9,7 +9,14 @@ public static class DenPublishValidationServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
+        var projectTargetPolicies = ReadProjectTargetPolicies(configuration);
+        var codeGateAccessPolicies = ReadCodeGateAccessPolicies(configuration);
+        ICodeGateAccessPolicyProvider codeGateAccessPolicyProvider = codeGateAccessPolicies.Count == 0
+            ? SubmissionCodeGateAccessPolicyProvider.Instance
+            : new ConfiguredCodeGateAccessPolicyProvider(codeGateAccessPolicies);
+
         services.AddSingleton<IGitCommandRunner>(new ProcessGitCommandRunner(TimeSpan.FromSeconds(30)));
+        services.AddSingleton<ICodeGateAccessPolicyProvider>(codeGateAccessPolicyProvider);
         services.AddSingleton<ICodeGateRefResolver, GitLsRemoteCodeGateRefResolver>();
         services.AddSingleton<ISubmissionFetcher, GitSubmissionFetcher>();
         services.AddSingleton<IChangedFileScopeValidator, GitChangedFileScopeValidator>();
@@ -24,7 +31,7 @@ public static class DenPublishValidationServiceCollectionExtensions
         {
             IPublishEngine preflight = new PublishValidationEngine();
             preflight = new CodeGatePublishValidationEngine(preflight, provider.GetRequiredService<ICodeGateRefResolver>());
-            preflight = new PublishPolicyValidationEngine(preflight, ReadTargetPolicy(configuration));
+            preflight = new PublishPolicyValidationEngine(preflight, ReadTargetPolicy(configuration, projectTargetPolicies));
 
             var coreWorkflow = new PromotionValidationWorkflow(
                 preflight,
@@ -40,7 +47,9 @@ public static class DenPublishValidationServiceCollectionExtensions
         return services;
     }
 
-    private static PublishTargetPolicy ReadTargetPolicy(IConfiguration configuration)
+    private static PublishTargetPolicy ReadTargetPolicy(
+        IConfiguration configuration,
+        IReadOnlyDictionary<string, ProjectPublishTargetPolicy> projectTargetPolicies)
     {
         var section = configuration.GetSection("DenPublish:TargetPolicy");
         var targetRemoteName = section["TargetRemoteName"] ?? "canonical";
@@ -52,7 +61,54 @@ public static class DenPublishValidationServiceCollectionExtensions
             targetRemoteName,
             canonicalRemoteUrl,
             pushBranchPrefixes,
-            fastForwardBranches);
+            fastForwardBranches,
+            projectTargetPolicies);
+    }
+
+    private static IReadOnlyDictionary<string, ProjectPublishTargetPolicy> ReadProjectTargetPolicies(IConfiguration configuration)
+    {
+        var result = new Dictionary<string, ProjectPublishTargetPolicy>(StringComparer.Ordinal);
+        foreach (var child in configuration.GetSection("DenPublish:Projects").GetChildren())
+        {
+            var projectId = child["ProjectId"] ?? child.Key;
+            if (string.IsNullOrWhiteSpace(projectId))
+            {
+                continue;
+            }
+
+            result[projectId] = new ProjectPublishTargetPolicy(
+                ProjectId: projectId,
+                TargetRemoteName: child["TargetRemoteName"],
+                CanonicalRemoteUrl: child["CanonicalRemoteUrl"],
+                PushBranchPrefixes: child.GetSection("PushBranchPrefixes").Get<string[]>(),
+                FastForwardBranches: child.GetSection("FastForwardBranches").Get<string[]>());
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyDictionary<string, CodeGateProjectAccessPolicy> ReadCodeGateAccessPolicies(IConfiguration configuration)
+    {
+        var result = new Dictionary<string, CodeGateProjectAccessPolicy>(StringComparer.Ordinal);
+        foreach (var child in configuration.GetSection("DenPublish:Projects").GetChildren())
+        {
+            var projectId = child["ProjectId"] ?? child.Key;
+            if (string.IsNullOrWhiteSpace(projectId))
+            {
+                continue;
+            }
+
+            var codeGateRemoteUrl = child["CodeGateRemoteUrl"];
+            var gitSshCommand = child["CodeGateGitSshCommand"];
+            if (string.IsNullOrWhiteSpace(codeGateRemoteUrl) && string.IsNullOrWhiteSpace(gitSshCommand))
+            {
+                continue;
+            }
+
+            result[projectId] = new CodeGateProjectAccessPolicy(projectId, codeGateRemoteUrl, gitSshCommand);
+        }
+
+        return result;
     }
 
     private static ILivePromotionPublisher ReadLivePromotionPublisher(IConfiguration configuration, IGitCommandRunner git)

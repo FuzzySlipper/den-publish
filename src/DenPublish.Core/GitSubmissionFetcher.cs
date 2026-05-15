@@ -56,10 +56,14 @@ public sealed record SubmissionFetchResult(
         => new(false, localRef, new GitSha(string.Empty), new ValidationFailure(code, message));
 }
 
-public sealed class GitSubmissionFetcher(IGitCommandRunner git, IWorkspaceDirectoryPreparer? workspaceDirectoryPreparer = null) : ISubmissionFetcher
+public sealed class GitSubmissionFetcher(
+    IGitCommandRunner git,
+    IWorkspaceDirectoryPreparer? workspaceDirectoryPreparer = null,
+    ICodeGateAccessPolicyProvider? accessPolicyProvider = null) : ISubmissionFetcher
 {
     private static readonly Regex SafeSubmissionId = new("^[A-Za-z0-9][A-Za-z0-9._-]*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private readonly IWorkspaceDirectoryPreparer _workspaceDirectoryPreparer = workspaceDirectoryPreparer ?? FileSystemWorkspaceDirectoryPreparer.Instance;
+    private readonly ICodeGateAccessPolicyProvider _accessPolicyProvider = accessPolicyProvider ?? SubmissionCodeGateAccessPolicyProvider.Instance;
 
     public SubmissionFetchResult Fetch(CodeSubmission submission, string workspacePath)
     {
@@ -79,6 +83,15 @@ public sealed class GitSubmissionFetcher(IGitCommandRunner git, IWorkspaceDirect
                 localRef,
                 PublishFailureCode.InvalidRequest,
                 "Workspace path is required to fetch a submission ref.");
+        }
+
+        var access = _accessPolicyProvider.Resolve(submission);
+        if (!access.Succeeded)
+        {
+            return SubmissionFetchResult.Failed(
+                localRef,
+                access.Failure?.Code ?? PublishFailureCode.InvalidRequest,
+                access.Failure?.Message ?? "code-gate access policy rejected the submission.");
         }
 
         var prepare = _workspaceDirectoryPreparer.Prepare(workspacePath);
@@ -109,9 +122,9 @@ public sealed class GitSubmissionFetcher(IGitCommandRunner git, IWorkspaceDirect
             workspacePath,
             "fetch",
             "--no-tags",
-            submission.CodeGateRemoteUrl,
+            access.RemoteUrl,
             $"+{submission.IngressRef}:{localRef}"
-        ]);
+        ], access.Environment);
 
         if (fetch.ExitCode != 0)
         {

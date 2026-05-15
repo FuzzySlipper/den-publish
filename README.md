@@ -27,8 +27,18 @@ Den document: `den-publish/den-code-gate-den-publish-workflow-contract-1420`.
 For production-style runs, configure `DenPublish:WorkspaceRoot` so `den-publish` derives its own managed Git workspace path instead of accepting a worker-provided filesystem path:
 
 ```bash
-DenPublish__WorkspaceRoot=/home/agents/runtime/den-publish/workspaces DenPublish__AuditFilePath=/home/agents/runtime/den-publish/audit/promotion-validation.jsonl DenPublish__TargetPolicy__CanonicalRemoteUrl=git@github.com:FuzzySlipper/<repo>.git ASPNETCORE_URLS=http://127.0.0.1:5090 dotnet run --project src/DenPublish.Api --no-launch-profile
+env \
+  DenPublish__WorkspaceRoot=/home/agents/runtime/den-publish/workspaces \
+  DenPublish__AuditFilePath=/home/agents/runtime/den-publish/audit/promotion-validation.jsonl \
+  DenPublish__Projects__0__ProjectId=den-channels \
+  DenPublish__Projects__0__CanonicalRemoteUrl=git@github.com:FuzzySlipper/den-channels.git \
+  DenPublish__Projects__0__CodeGateRemoteUrl=ssh://git@192.168.1.10:3022/den-channels/den-channels.git \
+  DenPublish__Projects__0__CodeGateGitSshCommand='ssh -F /dev/null -i /home/agents/runtime/den-publish/ssh/code-gate/den-channels -o IdentitiesOnly=yes -o BatchMode=yes' \
+  ASPNETCORE_URLS=http://127.0.0.1:5090 \
+  dotnet run --project src/DenPublish.Api --no-launch-profile
 ```
+
+Project-specific settings under `DenPublish:Projects:<projectId>` override the global target policy and give the service its own code-gate read route. For shell/systemd environment files, prefer numeric sections with `ProjectId` (for example `DenPublish__Projects__0__ProjectId=den-channels`) because project ids commonly contain hyphens that are not portable environment variable names. Workers still submit exact code-gate refs/SHAs; they do not receive canonical push credentials or service-side read keys.
 
 When `WorkspaceRoot` is set, request `WorkspacePath` values are ignored and the service derives:
 

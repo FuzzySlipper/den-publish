@@ -55,7 +55,19 @@ No secrets are required for validate-only code-gate fetches when the code-gate r
 ```bash
 DenPublish__WorkspaceRoot=/home/agents/runtime/den-publish/workspaces
 DenPublish__AuditFilePath=/home/agents/runtime/den-publish/audit/promotion-validation.jsonl
+
+# Optional global/default policy. Cross-project production should prefer DenPublish__Projects__<index>__* entries.
 DenPublish__TargetPolicy__CanonicalRemoteUrl=git@github.com:FuzzySlipper/den-publish.git
+
+# Example project-aware policy/read route. The SSH command is sensitive operator-managed config.
+# Use numeric sections plus ProjectId for shell/systemd-safe env names; project ids such as
+# den-channels contain hyphens and should not be used directly inside EnvironmentFile variable names.
+DenPublish__Projects__0__ProjectId=den-channels
+DenPublish__Projects__0__CanonicalRemoteUrl=git@github.com:FuzzySlipper/den-channels.git
+DenPublish__Projects__0__CodeGateRemoteUrl=ssh://git@192.168.1.10:3022/den-channels/den-channels.git
+DenPublish__Projects__0__CodeGateGitSshCommand=<redacted service-side ssh command>
+DenPublish__Projects__0__PushBranchPrefixes__0=task/
+DenPublish__Projects__0__FastForwardBranches__0=main
 ```
 
 `DenPublish__WorkspaceRoot` is required for production. When configured, `den-publish` derives:
@@ -120,7 +132,7 @@ Use the local status endpoint to verify the effective service configuration with
 curl -fsS http://127.0.0.1:5090/config/status
 ```
 
-The response follows `den-publish-runtime-config-v1` and reports workspace root, audit file path, canonical remote policy, and live-publishing enablement. Canonical remote values are redacted and include only a fingerprint/display form suitable for drift checks. Missing production-required settings produce warnings.
+The response follows `den-publish-runtime-config-v2` and reports workspace root, audit file path, global canonical remote policy, project-specific canonical/code-gate policies, code-gate credential mode fingerprints, and live-publishing enablement. Canonical/code-gate remote values are redacted or userinfo-stripped and include fingerprint/display forms suitable for drift checks. Missing production-required settings produce warnings.
 
 This endpoint is the preferred integration point for a future central Den configuration panel. The panel should query service-owned config status surfaces and compare them against Den-owned desired state, rather than depending on operators remembering every env file path.
 
@@ -140,7 +152,7 @@ Do not rely on ambient `agent` GitHub credentials for `/promotion/publish`. Live
 - `DenPublish__Publishing__CredentialMode=ssh_command`
 - `DenPublish__Publishing__GitSshCommand=<redacted operator-managed ssh command>`
 
-The SSH command value is treated as sensitive configuration. It is not included in `/config/status`; the status surface reports only `display=ssh_command` plus a fingerprint for drift checks. The service also sets `GIT_TERMINAL_PROMPT=0` for live `git push` calls.
+The live SSH command value is treated as sensitive configuration. It is not included in `/config/status`; the status surface reports only `display=ssh_command` plus a fingerprint for drift checks. Project code-gate read SSH commands are treated the same way. The service sets `GIT_TERMINAL_PROMPT=0` for credentialed child Git calls.
 
 Credential file placement and canonical live smoke still require a separate explicit approval gate.
 

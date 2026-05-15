@@ -178,13 +178,39 @@ public sealed class GitLsRemoteCodeGateRefResolverTests
         Assert.Contains(submission.IngressRef, result.ErrorMessage, StringComparison.Ordinal);
     }
 
+
+    [Fact]
+    public void ResolveHead_UsesConfiguredProjectRemoteAndCredentialEnvironment()
+    {
+        var submission = ApprovedSubmission();
+        var runner = new RecordingGitCommandRunner(new GitCommandResult(0, $"{submission.HeadCommit.Value}\t{submission.IngressRef}\n", string.Empty));
+        var provider = new ConfiguredCodeGateAccessPolicyProvider(new Dictionary<string, CodeGateProjectAccessPolicy>
+        {
+            ["den-channels"] = new(
+                ProjectId: "den-channels",
+                CodeGateRemoteUrl: submission.CodeGateRemoteUrl,
+                GitSshCommand: "ssh -F /dev/null -i /runtime/den-channels-codegate")
+        });
+        var resolver = new GitLsRemoteCodeGateRefResolver(runner, provider);
+
+        var result = resolver.ResolveHead(submission);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(["ls-remote", "--exit-code", submission.CodeGateRemoteUrl, submission.IngressRef], runner.Arguments);
+        Assert.NotNull(runner.Environment);
+        Assert.Equal("ssh -F /dev/null -i /runtime/den-channels-codegate", runner.Environment!["GIT_SSH_COMMAND"]);
+        Assert.Equal("0", runner.Environment!["GIT_TERMINAL_PROMPT"]);
+    }
+
     private sealed class RecordingGitCommandRunner(GitCommandResult result) : IGitCommandRunner
     {
         public IReadOnlyList<string>? Arguments { get; private set; }
+        public IReadOnlyDictionary<string, string>? Environment { get; private set; }
 
         public GitCommandResult Run(IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? environment = null)
         {
             Arguments = arguments;
+            Environment = environment;
             return result;
         }
     }
