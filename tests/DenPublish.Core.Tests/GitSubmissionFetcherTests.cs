@@ -5,21 +5,25 @@ namespace DenPublish.Core.Tests;
 public sealed class GitSubmissionFetcherTests
 {
     [Fact]
-    public void Fetch_RunsExactRefIntoDenPublishLocalRef()
+    public void Fetch_PreparesWorkspaceAndRunsExactRefIntoDenPublishLocalRef()
     {
         var submission = ApprovedSubmission();
         var workspace = "/var/lib/den-publish/workspaces/den-channels";
         var runner = new RecordingGitCommandRunner(
+            new GitCommandResult(0, "Initialized empty Git repository", string.Empty),
             new GitCommandResult(0, string.Empty, string.Empty),
             new GitCommandResult(0, $"{submission.HeadCommit.Value}\n", string.Empty));
-        ISubmissionFetcher fetcher = new GitSubmissionFetcher(runner);
+        var preparer = new RecordingWorkspaceDirectoryPreparer();
+        ISubmissionFetcher fetcher = new GitSubmissionFetcher(runner, preparer);
 
         var result = fetcher.Fetch(submission, workspace);
 
         Assert.True(result.Succeeded);
         Assert.Equal("refs/den-publish/submissions/sub_1424_001", result.LocalRef);
-        Assert.Equal(["-C", workspace, "fetch", "--no-tags", submission.CodeGateRemoteUrl, $"+{submission.IngressRef}:refs/den-publish/submissions/sub_1424_001"], runner.Commands[0]);
-        Assert.Equal(["-C", workspace, "rev-parse", "refs/den-publish/submissions/sub_1424_001^{commit}"], runner.Commands[1]);
+        Assert.Equal([workspace], preparer.PreparedPaths);
+        Assert.Equal(["-C", workspace, "init"], runner.Commands[0]);
+        Assert.Equal(["-C", workspace, "fetch", "--no-tags", submission.CodeGateRemoteUrl, $"+{submission.IngressRef}:refs/den-publish/submissions/sub_1424_001"], runner.Commands[1]);
+        Assert.Equal(["-C", workspace, "rev-parse", "refs/den-publish/submissions/sub_1424_001^{commit}"], runner.Commands[2]);
     }
 
     [Fact]
@@ -28,8 +32,9 @@ public sealed class GitSubmissionFetcherTests
         var submission = ApprovedSubmission();
         var runner = new RecordingGitCommandRunner(
             new GitCommandResult(0, string.Empty, string.Empty),
+            new GitCommandResult(0, string.Empty, string.Empty),
             new GitCommandResult(0, $"{submission.HeadCommit.Value}\n", string.Empty));
-        ISubmissionFetcher fetcher = new GitSubmissionFetcher(runner);
+        ISubmissionFetcher fetcher = new GitSubmissionFetcher(runner, new RecordingWorkspaceDirectoryPreparer());
 
         var result = fetcher.Fetch(submission, "/workspace");
 
@@ -41,8 +46,10 @@ public sealed class GitSubmissionFetcherTests
     [Fact]
     public void Fetch_FailsWhenGitFetchFails()
     {
-        var runner = new RecordingGitCommandRunner(new GitCommandResult(128, string.Empty, "could not read from remote repository"));
-        ISubmissionFetcher fetcher = new GitSubmissionFetcher(runner);
+        var runner = new RecordingGitCommandRunner(
+            new GitCommandResult(0, string.Empty, string.Empty),
+            new GitCommandResult(128, string.Empty, "could not read from remote repository"));
+        ISubmissionFetcher fetcher = new GitSubmissionFetcher(runner, new RecordingWorkspaceDirectoryPreparer());
 
         var result = fetcher.Fetch(ApprovedSubmission(), "/workspace");
 
@@ -57,8 +64,9 @@ public sealed class GitSubmissionFetcherTests
     {
         var runner = new RecordingGitCommandRunner(
             new GitCommandResult(0, string.Empty, string.Empty),
+            new GitCommandResult(0, string.Empty, string.Empty),
             new GitCommandResult(0, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n", string.Empty));
-        ISubmissionFetcher fetcher = new GitSubmissionFetcher(runner);
+        ISubmissionFetcher fetcher = new GitSubmissionFetcher(runner, new RecordingWorkspaceDirectoryPreparer());
 
         var result = fetcher.Fetch(ApprovedSubmission(), "/workspace");
 
@@ -66,6 +74,42 @@ public sealed class GitSubmissionFetcherTests
         Assert.NotNull(result.Failure);
         Assert.Equal(PublishFailureCode.CodeGateHeadMismatch, result.Failure.Code);
     }
+
+
+
+    [Fact]
+    public void Fetch_FailsClosedWhenWorkspaceDirectoryPreparationFails()
+    {
+        var runner = new RecordingGitCommandRunner();
+        ISubmissionFetcher fetcher = new GitSubmissionFetcher(
+            runner,
+            new FailingWorkspaceDirectoryPreparer("permission denied"));
+
+        var result = fetcher.Fetch(ApprovedSubmission(), "/managed/workspace");
+
+        Assert.False(result.Succeeded);
+        Assert.NotNull(result.Failure);
+        Assert.Equal(PublishFailureCode.CodeGateFetchFailed, result.Failure.Code);
+        Assert.Contains("permission denied", result.Failure.Message, StringComparison.Ordinal);
+        Assert.Empty(runner.Commands);
+    }
+
+    [Fact]
+    public void Fetch_FailsClosedWhenWorkspaceGitInitFails()
+    {
+        var runner = new RecordingGitCommandRunner(new GitCommandResult(128, string.Empty, "not a git directory"));
+        ISubmissionFetcher fetcher = new GitSubmissionFetcher(runner, new RecordingWorkspaceDirectoryPreparer());
+
+        var result = fetcher.Fetch(ApprovedSubmission(), "/managed/workspace");
+
+        Assert.False(result.Succeeded);
+        Assert.NotNull(result.Failure);
+        Assert.Equal(PublishFailureCode.CodeGateFetchFailed, result.Failure.Code);
+        Assert.Contains("not a git directory", result.Failure.Message, StringComparison.Ordinal);
+        Assert.Single(runner.Commands);
+        Assert.Equal(["-C", "/managed/workspace", "init"], runner.Commands[0]);
+    }
+
 
     [Fact]
     public void Fetch_RejectsUnsafeSubmissionIdForLocalRef()
@@ -79,6 +123,26 @@ public sealed class GitSubmissionFetcherTests
         Assert.NotNull(result.Failure);
         Assert.Equal(PublishFailureCode.InvalidRequest, result.Failure.Code);
     }
+
+
+
+    private sealed class RecordingWorkspaceDirectoryPreparer : IWorkspaceDirectoryPreparer
+    {
+        public List<string> PreparedPaths { get; } = [];
+
+        public WorkspaceDirectoryPreparationResult Prepare(string workspacePath)
+        {
+            PreparedPaths.Add(workspacePath);
+            return WorkspaceDirectoryPreparationResult.Prepared();
+        }
+    }
+
+    private sealed class FailingWorkspaceDirectoryPreparer(string message) : IWorkspaceDirectoryPreparer
+    {
+        public WorkspaceDirectoryPreparationResult Prepare(string workspacePath)
+            => WorkspaceDirectoryPreparationResult.Failed(message);
+    }
+
 
     private sealed class RecordingGitCommandRunner(params GitCommandResult[] results) : IGitCommandRunner
     {

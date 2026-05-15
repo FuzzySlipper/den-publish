@@ -215,3 +215,9 @@ The configured resolver rejects unsafe path components such as `..`, `/`, or `\`
 
 For developer/test use without `DenPublish:WorkspaceRoot`, the API still supports the request-provided workspace path. Production/user-service deployment should set `DenPublish:WorkspaceRoot` to an agent-owned durable path and should not rely on caller-provided filesystem paths.
 
+## Managed workspace initialization slice
+
+`GitSubmissionFetcher` now prepares service-owned workspaces itself before importing a code-gate ref. It creates the configured workspace directory and runs `git -C <workspace> init` before fetching the exact ingress ref into `refs/den-publish/submissions/<submission_id>`.
+
+This removes the last known per-project/per-submission filesystem shim from validate-only operation: callers provide Den/code-gate metadata; `den-publish` creates and owns its local Git workspace state. Directory preparation and `git init` failures fail closed as `CodeGateFetchFailed` before any promotion planning.
+

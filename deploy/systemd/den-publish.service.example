@@ -1,0 +1,22 @@
+[Unit]
+Description=Den Publish local promotion service
+After=network-online.target
+Wants=network-online.target
+Documentation=file:/home/dev/den-publish/docs/deployment.md
+
+[Service]
+Type=simple
+WorkingDirectory=/home/dev/den-publish/artifacts/publish/DenPublish.Api
+ExecStart=/usr/bin/dotnet /home/dev/den-publish/artifacts/publish/DenPublish.Api/DenPublish.Api.dll
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5090
+EnvironmentFile=%h/.config/den-publish/den-publish.env
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/agents/runtime/den-publish
+
+[Install]
+WantedBy=default.target

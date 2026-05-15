@@ -7,6 +7,42 @@ public interface ISubmissionFetcher
     SubmissionFetchResult Fetch(CodeSubmission submission, string workspacePath);
 }
 
+public interface IWorkspaceDirectoryPreparer
+{
+    WorkspaceDirectoryPreparationResult Prepare(string workspacePath);
+}
+
+public sealed record WorkspaceDirectoryPreparationResult(bool Succeeded, string? FailureMessage)
+{
+    public static WorkspaceDirectoryPreparationResult Prepared()
+        => new(true, null);
+
+    public static WorkspaceDirectoryPreparationResult Failed(string failureMessage)
+        => new(false, failureMessage);
+}
+
+public sealed class FileSystemWorkspaceDirectoryPreparer : IWorkspaceDirectoryPreparer
+{
+    public static FileSystemWorkspaceDirectoryPreparer Instance { get; } = new();
+
+    private FileSystemWorkspaceDirectoryPreparer()
+    {
+    }
+
+    public WorkspaceDirectoryPreparationResult Prepare(string workspacePath)
+    {
+        try
+        {
+            Directory.CreateDirectory(workspacePath);
+            return WorkspaceDirectoryPreparationResult.Prepared();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return WorkspaceDirectoryPreparationResult.Failed($"failed to prepare managed workspace directory '{workspacePath}': {ex.Message}");
+        }
+    }
+}
+
 public sealed record SubmissionFetchResult(
     bool Succeeded,
     string LocalRef,
@@ -20,9 +56,10 @@ public sealed record SubmissionFetchResult(
         => new(false, localRef, new GitSha(string.Empty), new ValidationFailure(code, message));
 }
 
-public sealed class GitSubmissionFetcher(IGitCommandRunner git) : ISubmissionFetcher
+public sealed class GitSubmissionFetcher(IGitCommandRunner git, IWorkspaceDirectoryPreparer? workspaceDirectoryPreparer = null) : ISubmissionFetcher
 {
     private static readonly Regex SafeSubmissionId = new("^[A-Za-z0-9][A-Za-z0-9._-]*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private readonly IWorkspaceDirectoryPreparer _workspaceDirectoryPreparer = workspaceDirectoryPreparer ?? FileSystemWorkspaceDirectoryPreparer.Instance;
 
     public SubmissionFetchResult Fetch(CodeSubmission submission, string workspacePath)
     {
@@ -42,6 +79,29 @@ public sealed class GitSubmissionFetcher(IGitCommandRunner git) : ISubmissionFet
                 localRef,
                 PublishFailureCode.InvalidRequest,
                 "Workspace path is required to fetch a submission ref.");
+        }
+
+        var prepare = _workspaceDirectoryPreparer.Prepare(workspacePath);
+        if (!prepare.Succeeded)
+        {
+            return SubmissionFetchResult.Failed(
+                localRef,
+                PublishFailureCode.CodeGateFetchFailed,
+                prepare.FailureMessage ?? "failed to prepare managed workspace directory.");
+        }
+
+        var init = git.Run([
+            "-C",
+            workspacePath,
+            "init"
+        ]);
+
+        if (init.ExitCode != 0)
+        {
+            return SubmissionFetchResult.Failed(
+                localRef,
+                PublishFailureCode.CodeGateFetchFailed,
+                GitError(init, "git init failed while preparing the managed workspace"));
         }
 
         var fetch = git.Run([
