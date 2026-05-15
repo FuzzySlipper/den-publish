@@ -128,3 +128,19 @@ Ancestry behavior:
 
 This slice still performs no canonical remote update. Later fast-forward-to-target checks can layer a target branch/ref fetch on top of the same `merge-base --is-ancestor` primitive.
 
+## Promotion validation workflow slice
+
+`PromotionValidationWorkflow` composes the previously independent validation/fetch primitives into one high-level validate-only workflow. It is the first orchestration boundary suitable for API/service wiring, but it still does not publish and does not require canonical push credentials.
+
+Workflow order:
+
+1. Run the configured `IPublishEngine` preflight chain. In production composition this should include Den submission contract validation, code-gate immutable ref verification, and target policy validation.
+2. Fetch the exact immutable code-gate submission into the managed local ref through `ISubmissionFetcher`.
+3. Validate changed-file scope through `IChangedFileScopeValidator`.
+4. Validate submission base/head ancestry through `ISubmissionAncestryValidator`.
+5. Return a `PromotionValidationWorkflowResult` containing the aggregate `PublishValidationResult`, the managed local ref, and the fetched head SHA.
+
+The workflow stops at the first non-publishable stage and returns that structured failure rather than continuing into later Git steps. Fetch failures are mapped back into `PublishValidationResult` so API callers can use one result shape for both pure validation and workspace validation failures.
+
+This workflow intentionally performs no canonical remote update. A later publisher abstraction can consume the same validated local ref/head only after audit persistence and credential-gated publish policy are in place.
+
