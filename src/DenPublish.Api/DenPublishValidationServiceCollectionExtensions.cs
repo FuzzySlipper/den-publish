@@ -14,6 +14,7 @@ public static class DenPublishValidationServiceCollectionExtensions
         services.AddSingleton<ISubmissionFetcher, GitSubmissionFetcher>();
         services.AddSingleton<IChangedFileScopeValidator, GitChangedFileScopeValidator>();
         services.AddSingleton<ISubmissionAncestryValidator, GitSubmissionAncestryValidator>();
+        services.AddSingleton<IPromotionPublisher, DryRunPromotionPublisher>();
 
         services.AddSingleton<IPromotionAuditStore>(_ => new FilePromotionAuditStore(ReadAuditFilePath(configuration)));
         services.AddSingleton<IPromotionValidationWorkflow>(provider =>

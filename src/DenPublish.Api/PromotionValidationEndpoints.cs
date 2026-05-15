@@ -11,6 +11,11 @@ public static class PromotionValidationEndpoints
             var response = Validate(request, workflow);
             return response.IsPublishable ? Results.Ok(response) : Results.BadRequest(response);
         });
+        app.MapPost("/promotion/dry-run", static (PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow, IPromotionPublisher publisher) =>
+        {
+            var response = ValidateAndDryRun(request, workflow, publisher);
+            return response.Succeeded ? Results.Ok(response) : Results.BadRequest(response);
+        });
         return app;
     }
 
@@ -21,17 +26,46 @@ public static class PromotionValidationEndpoints
 
         if (!TryMapRequest(request, out var domainRequest, out var failure))
         {
-            return PromotionValidationApiResponse.FromResult(new PromotionValidationWorkflowResult(
-                PublishValidationResult.Rejected(
-                    "promotion validation request is malformed",
-                    failure!),
-                LocalRef: null,
-                FetchedHeadCommit: null));
+            return PromotionValidationApiResponse.FromResult(MalformedRequestResult(failure!));
         }
 
         var result = workflow.Validate(domainRequest!);
         return PromotionValidationApiResponse.FromResult(result);
     }
+
+    public static PromotionDryRunApiResponse ValidateAndDryRun(
+        PromotionValidationApiRequest request,
+        IPromotionValidationWorkflow workflow,
+        IPromotionPublisher publisher)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(workflow);
+        ArgumentNullException.ThrowIfNull(publisher);
+
+        if (!TryMapRequest(request, out var domainRequest, out var failure))
+        {
+            var malformed = MalformedRequestResult(failure!);
+            return PromotionDryRunApiResponse.FromValidationOnly(malformed);
+        }
+
+        var mappedRequest = domainRequest!;
+        var validationResult = workflow.Validate(mappedRequest);
+        if (!validationResult.IsPublishable)
+        {
+            return PromotionDryRunApiResponse.FromValidationOnly(validationResult);
+        }
+
+        var publishResult = publisher.Publish(new PromotionPublishRequest(mappedRequest.Decision, validationResult));
+        return PromotionDryRunApiResponse.FromPublishResult(validationResult, publishResult);
+    }
+
+    private static PromotionValidationWorkflowResult MalformedRequestResult(ValidationFailure failure)
+        => new(
+            PublishValidationResult.Rejected(
+                "promotion validation request is malformed",
+                failure),
+            LocalRef: null,
+            FetchedHeadCommit: null);
 
     private static bool TryMapRequest(
         PromotionValidationApiRequest request,
@@ -232,7 +266,7 @@ public sealed record PromotionValidationApiResponse(
             LocalRef: result.LocalRef,
             FetchedHeadCommit: result.FetchedHeadCommit?.Value);
 
-    private static string ToApiString(PublishValidationStatus status)
+    public static string ToApiString(PublishValidationStatus status)
         => status switch
         {
             PublishValidationStatus.Validated => "validated",
@@ -241,7 +275,7 @@ public sealed record PromotionValidationApiResponse(
             _ => status.ToString().ToLowerInvariant()
         };
 
-    private static string ToApiString(PublishFailureCode code)
+    public static string ToApiString(PublishFailureCode code)
         => code switch
         {
             PublishFailureCode.InvalidRequest => "invalid_request",
@@ -264,3 +298,48 @@ public sealed record PromotionValidationApiResponse(
 }
 
 public sealed record PromotionValidationFailureApiModel(string Code, string Message);
+
+public sealed record PromotionDryRunApiResponse(
+    bool Succeeded,
+    string PublishStatus,
+    string PublishSummary,
+    PromotionValidationApiResponse Validation,
+    IReadOnlyList<string> PlannedCommands,
+    IReadOnlyList<PromotionValidationFailureApiModel> PublishFailures)
+{
+    public static PromotionDryRunApiResponse FromValidationOnly(PromotionValidationWorkflowResult validation)
+    {
+        var validationResponse = PromotionValidationApiResponse.FromResult(validation);
+        return new PromotionDryRunApiResponse(
+            Succeeded: false,
+            PublishStatus: validationResponse.Status,
+            PublishSummary: validationResponse.Summary,
+            Validation: validationResponse,
+            PlannedCommands: [],
+            PublishFailures: validationResponse.Failures);
+    }
+
+    public static PromotionDryRunApiResponse FromPublishResult(
+        PromotionValidationWorkflowResult validation,
+        PromotionPublishResult publish)
+        => new(
+            Succeeded: publish.Succeeded,
+            PublishStatus: ToApiString(publish.Status),
+            PublishSummary: publish.Summary,
+            Validation: PromotionValidationApiResponse.FromResult(validation),
+            PlannedCommands: publish.PlannedCommands,
+            PublishFailures: publish.Failures
+                .Select(failure => new PromotionValidationFailureApiModel(PromotionValidationApiResponse.ToApiString(failure.Code), failure.Message))
+                .ToArray());
+
+    private static string ToApiString(PromotionPublishStatus status)
+        => status switch
+        {
+            PromotionPublishStatus.DryRun => "dry_run",
+            PromotionPublishStatus.Published => "published",
+            PromotionPublishStatus.Rejected => "rejected",
+            PromotionPublishStatus.Failed => "failed",
+            _ => status.ToString().ToLowerInvariant()
+        };
+}
+

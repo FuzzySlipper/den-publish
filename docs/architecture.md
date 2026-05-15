@@ -183,3 +183,17 @@ Publisher behavior:
 
 This gives orchestrators and future API endpoints a safe command-planning surface for validate-only smoke tests while preserving the credential boundary. Live publishing remains intentionally unavailable in this implementation slice.
 
+## Validate-and-dry-run API endpoint slice
+
+`DenPublish.Api` now exposes `POST /promotion/dry-run` as a safe orchestration surface for end-to-end validate-only smoke tests. The endpoint maps the same request contract used by `/promotion/validate`, runs the audited validation workflow, and only invokes `IPromotionPublisher` when validation is publishable.
+
+Endpoint behavior:
+
+- Malformed requests return a rejected response without invoking workflow or publisher dependencies.
+- Rejected/failed validation results return the validation response without invoking the publisher.
+- Publishable validation results are passed to the registered publisher as `PromotionPublishRequest`.
+- The default registered publisher is `DryRunPromotionPublisher`, so successful calls return planned push command shapes without invoking Git or requiring canonical push credentials.
+- `ValidateOnly=false` still fails closed in the publisher with `CredentialUnavailable` until an explicitly approved credential-backed publisher is installed.
+
+This endpoint is intended for local/service validate-only smoke before live publisher credentials exist. It is not a deployment or service configuration change by itself.
+
