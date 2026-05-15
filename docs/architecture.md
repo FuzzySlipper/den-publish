@@ -228,3 +228,12 @@ This removes the last known per-project/per-submission filesystem shim from vali
 `/promotion/dry-run` is a validate-only endpoint. It now rejects requests where `decision.validate_only` is `false` before resolving a workspace, calling the validation workflow, fetching code-gate refs, appending audit records, or invoking a publisher. This preserves the endpoint contract if a future credential-backed publisher is registered: dry-run requests cannot accidentally become live pushes.
 
 Live promotion must use a separate explicit endpoint (for example `/promotion/publish`) with its own credential, policy, audit, and rollback gate.
+
+
+## Explicit live publish endpoint slice
+
+Live promotion is now separated from dry-run planning. `/promotion/publish` requires `decision.validate_only=false`; `/promotion/dry-run` requires `decision.validate_only=true`. The service registers a disabled live publisher by default unless `DenPublish__Publishing__Enabled=true` is explicitly configured.
+
+When enabled, the Git-backed live publisher uses argv-only `git -C <managed-workspace> push <canonical-remote-url> <managed-local-ref>:refs/heads/<target-branch>`. It revalidates the publish-ready invariants at the publisher boundary: non-validate-only decision, publishable workflow result, safe managed local ref, fetched head matching the decision expected head, safe target branch, managed workspace path, and target remote URL. Failures return structured `PublishFailureCode` values and no shell interpolation is used.
+
+The persistent den-k8plus service remains deployed without `DenPublish__Publishing__Enabled`, so live publish requests fail before workspace resolution, validation, fetch, audit, or publisher invocation.

@@ -5,6 +5,11 @@ public interface IPromotionPublisher
     PromotionPublishResult Publish(PromotionPublishRequest request);
 }
 
+public interface ILivePromotionPublisher : IPromotionPublisher
+{
+    bool IsEnabled { get; }
+}
+
 public enum PromotionPublishStatus
 {
     DryRun,
@@ -15,7 +20,9 @@ public enum PromotionPublishStatus
 
 public sealed record PromotionPublishRequest(
     PublishDecision Decision,
-    PromotionValidationWorkflowResult Validation);
+    PromotionValidationWorkflowResult Validation,
+    string WorkspacePath = "",
+    string TargetRemoteUrl = "");
 
 public sealed record PromotionPublishResult(
     PromotionPublishStatus Status,
@@ -28,6 +35,9 @@ public sealed record PromotionPublishResult(
 
     public static PromotionPublishResult DryRun(string summary, IReadOnlyList<string> plannedCommands)
         => new(PromotionPublishStatus.DryRun, summary, plannedCommands, []);
+
+    public static PromotionPublishResult Published(string summary)
+        => new(PromotionPublishStatus.Published, summary, [], []);
 
     public static PromotionPublishResult Rejected(string summary, params ValidationFailure[] failures)
         => new(PromotionPublishStatus.Rejected, summary, [], failures);

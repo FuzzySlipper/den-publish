@@ -103,3 +103,10 @@ Leave runtime/audit/workspace data intact unless cleanup is explicitly approved.
 Canonical push credentials and live canonical pushes require separate explicit approval. Before that gate, the service should only be used for validate-only and dry-run planning.
 
 The `/promotion/dry-run` endpoint rejects `decision.validate_only=false` before validation/fetch/audit/publisher execution. A future live-publish rollout must use a separate explicit publish endpoint and must not reuse the dry-run endpoint for credential-backed pushes.
+
+
+### Live publish endpoint gate
+
+`/promotion/publish` is present but disabled in the validate-only deployment unless `DenPublish__Publishing__Enabled=true` is set. Do not set that flag in the persistent service until canonical credential placement and live-smoke rollback scope are separately approved.
+
+When live publishing is enabled for a local-only smoke, use disposable bare repositories and a temporary foreground process first. The persistent service should continue to omit `DenPublish__Publishing__Enabled` until the credential gate is approved.

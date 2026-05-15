@@ -16,6 +16,11 @@ public static class PromotionValidationEndpoints
             var response = ValidateAndDryRun(request, workflow, publisher, workspacePathResolver);
             return response.Succeeded ? Results.Ok(response) : Results.BadRequest(response);
         });
+        app.MapPost("/promotion/publish", static (PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow, ILivePromotionPublisher publisher, IWorkspacePathResolver workspacePathResolver) =>
+        {
+            var response = ValidateAndPublish(request, workflow, publisher, workspacePathResolver);
+            return response.Succeeded ? Results.Ok(response) : Results.BadRequest(response);
+        });
         return app;
     }
 
@@ -95,11 +100,80 @@ public static class PromotionValidationEndpoints
         return PromotionDryRunApiResponse.FromPublishResult(validationResult, publishResult);
     }
 
+
+
+    public static PromotionDryRunApiResponse ValidateAndPublish(
+        PromotionValidationApiRequest request,
+        IPromotionValidationWorkflow workflow,
+        ILivePromotionPublisher publisher)
+        => ValidateAndPublish(request, workflow, publisher, RequestWorkspacePathResolver.Instance);
+
+    public static PromotionDryRunApiResponse ValidateAndPublish(
+        PromotionValidationApiRequest request,
+        IPromotionValidationWorkflow workflow,
+        ILivePromotionPublisher publisher,
+        IWorkspacePathResolver workspacePathResolver)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(workflow);
+        ArgumentNullException.ThrowIfNull(publisher);
+        ArgumentNullException.ThrowIfNull(workspacePathResolver);
+
+        if (request.Decision.ValidateOnly)
+        {
+            var validateOnlyFailure = new ValidationFailure(
+                PublishFailureCode.InvalidRequest,
+                "/promotion/publish requires decision.validate_only=false; use /promotion/dry-run for validate-only planning.");
+            return PromotionDryRunApiResponse.FromValidationOnly(MalformedRequestResult(validateOnlyFailure));
+        }
+
+        if (!publisher.IsEnabled)
+        {
+            var disabledFailure = new ValidationFailure(
+                PublishFailureCode.CredentialUnavailable,
+                "Live publishing is disabled by service configuration; no validation, fetch, audit, or push was attempted.");
+            return PromotionDryRunApiResponse.FromValidationOnly(FailedRequestResult("live publishing is disabled by service configuration", disabledFailure));
+        }
+
+        var workspacePath = workspacePathResolver.Resolve(request);
+        if (!workspacePath.Succeeded)
+        {
+            var malformed = MalformedRequestResult(workspacePath.Failure!);
+            return PromotionDryRunApiResponse.FromValidationOnly(malformed);
+        }
+
+        if (!TryMapRequest(request, workspacePath.WorkspacePath!, out var domainRequest, out var failure))
+        {
+            var malformed = MalformedRequestResult(failure!);
+            return PromotionDryRunApiResponse.FromValidationOnly(malformed);
+        }
+
+        var mappedRequest = domainRequest!;
+        var validationResult = workflow.Validate(mappedRequest);
+        if (!validationResult.IsPublishable)
+        {
+            return PromotionDryRunApiResponse.FromValidationOnly(validationResult);
+        }
+
+        var publishResult = publisher.Publish(new PromotionPublishRequest(
+            mappedRequest.Decision,
+            validationResult,
+            mappedRequest.WorkspacePath,
+            mappedRequest.Submission?.CanonicalRemoteUrl ?? string.Empty));
+        return PromotionDryRunApiResponse.FromPublishResult(validationResult, publishResult);
+    }
+
     private static PromotionValidationWorkflowResult MalformedRequestResult(ValidationFailure failure)
         => new(
             PublishValidationResult.Rejected(
                 "promotion validation request is malformed",
                 failure),
+            LocalRef: null,
+            FetchedHeadCommit: null);
+
+    private static PromotionValidationWorkflowResult FailedRequestResult(string summary, ValidationFailure failure)
+        => new(
+            PublishValidationResult.Failed(summary, failure),
             LocalRef: null,
             FetchedHeadCommit: null);
 

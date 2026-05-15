@@ -15,6 +15,7 @@ public static class DenPublishValidationServiceCollectionExtensions
         services.AddSingleton<IChangedFileScopeValidator, GitChangedFileScopeValidator>();
         services.AddSingleton<ISubmissionAncestryValidator, GitSubmissionAncestryValidator>();
         services.AddSingleton<IPromotionPublisher, DryRunPromotionPublisher>();
+        services.AddSingleton<ILivePromotionPublisher>(provider => ReadLivePromotionPublisher(configuration, provider.GetRequiredService<IGitCommandRunner>()));
         services.AddSingleton<IWorkspacePathResolver>(_ => ReadWorkspacePathResolver(configuration));
 
         services.AddSingleton<IPromotionAuditStore>(_ => new FilePromotionAuditStore(ReadAuditFilePath(configuration)));
@@ -51,6 +52,14 @@ public static class DenPublishValidationServiceCollectionExtensions
             canonicalRemoteUrl,
             pushBranchPrefixes,
             fastForwardBranches);
+    }
+
+    private static ILivePromotionPublisher ReadLivePromotionPublisher(IConfiguration configuration, IGitCommandRunner git)
+    {
+        var enabled = configuration.GetValue<bool>("DenPublish:Publishing:Enabled");
+        return enabled
+            ? new GitPromotionPublisher(git)
+            : new DisabledLivePromotionPublisher();
     }
 
     private static IWorkspacePathResolver ReadWorkspacePathResolver(IConfiguration configuration)

@@ -106,6 +106,76 @@ public sealed class PromotionDryRunEndpointTests
         Assert.Null(publisher.CapturedRequest);
     }
 
+
+
+    [Fact]
+    public void ValidateAndPublish_RejectsValidateOnlyDecisionBeforeWorkflowOrPublisher()
+    {
+        var workflow = new RecordingWorkflow(new PromotionValidationWorkflowResult(
+            PublishValidationResult.Approved("workflow ok"),
+            LocalRef: null,
+            FetchedHeadCommit: null));
+        var publisher = new RecordingLivePublisher(enabled: true, PromotionPublishResult.Failed("should not run"));
+
+        var response = PromotionValidationEndpoints.ValidateAndPublish(Request(), workflow, publisher);
+
+        Assert.False(response.Succeeded);
+        Assert.Equal("rejected", response.PublishStatus);
+        Assert.Equal("invalid_request", Assert.Single(response.PublishFailures).Code);
+        Assert.Contains("/promotion/publish requires decision.validate_only=false", response.PublishFailures[0].Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(workflow.CapturedRequest);
+        Assert.Null(publisher.CapturedRequest);
+    }
+
+    [Fact]
+    public void ValidateAndPublish_FailsWhenLivePublisherDisabledBeforeWorkflowOrPublisher()
+    {
+        var workflow = new RecordingWorkflow(new PromotionValidationWorkflowResult(
+            PublishValidationResult.Approved("workflow ok"),
+            LocalRef: null,
+            FetchedHeadCommit: null));
+        var publisher = new RecordingLivePublisher(enabled: false, PromotionPublishResult.Failed("should not run"));
+        var request = Request() with
+        {
+            Decision = Request().Decision with { ValidateOnly = false }
+        };
+
+        var response = PromotionValidationEndpoints.ValidateAndPublish(request, workflow, publisher);
+
+        Assert.False(response.Succeeded);
+        Assert.Equal("failed", response.PublishStatus);
+        Assert.Equal("credential_unavailable", Assert.Single(response.PublishFailures).Code);
+        Assert.Null(workflow.CapturedRequest);
+        Assert.Null(publisher.CapturedRequest);
+    }
+
+    [Fact]
+    public void ValidateAndPublish_ValidatesThenPublishesLiveDecision()
+    {
+        var expectedHead = Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        var validation = new PromotionValidationWorkflowResult(
+            PublishValidationResult.Approved("workflow ok", ["all validation checks passed"]),
+            LocalRef: "refs/den-publish/submissions/sub_1424_001",
+            FetchedHeadCommit: expectedHead);
+        var workflow = new RecordingWorkflow(validation);
+        var publisher = new RecordingLivePublisher(enabled: true, PromotionPublishResult.Published("published to canonical"));
+        var request = Request() with
+        {
+            Decision = Request().Decision with { ValidateOnly = false }
+        };
+
+        var response = PromotionValidationEndpoints.ValidateAndPublish(request, workflow, publisher);
+
+        Assert.True(response.Succeeded);
+        Assert.Equal("published", response.PublishStatus);
+        Assert.Equal("published to canonical", response.PublishSummary);
+        Assert.NotNull(workflow.CapturedRequest);
+        Assert.NotNull(publisher.CapturedRequest);
+        Assert.False(publisher.CapturedRequest.Decision.ValidateOnly);
+        Assert.Equal("/var/lib/den-publish/workspaces/den-channels", publisher.CapturedRequest.WorkspacePath);
+        Assert.Equal("git@github.com:FuzzySlipper/den-channels.git", publisher.CapturedRequest.TargetRemoteUrl);
+    }
+
     private sealed class RecordingWorkflow(PromotionValidationWorkflowResult result) : IPromotionValidationWorkflow
     {
         public PromotionValidationRequest? CapturedRequest { get; private set; }
@@ -119,6 +189,20 @@ public sealed class PromotionDryRunEndpointTests
 
     private sealed class RecordingPublisher(PromotionPublishResult result) : IPromotionPublisher
     {
+        public PromotionPublishRequest? CapturedRequest { get; private set; }
+
+        public PromotionPublishResult Publish(PromotionPublishRequest request)
+        {
+            CapturedRequest = request;
+            return result;
+        }
+    }
+
+
+
+    private sealed class RecordingLivePublisher(bool enabled, PromotionPublishResult result) : ILivePromotionPublisher
+    {
+        public bool IsEnabled { get; } = enabled;
         public PromotionPublishRequest? CapturedRequest { get; private set; }
 
         public PromotionPublishResult Publish(PromotionPublishRequest request)
