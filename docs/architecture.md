@@ -144,3 +144,16 @@ The workflow stops at the first non-publishable stage and returns that structure
 
 This workflow intentionally performs no canonical remote update. A later publisher abstraction can consume the same validated local ref/head only after audit persistence and credential-gated publish policy are in place.
 
+## Promotion audit persistence slice
+
+`AuditedPromotionValidationWorkflow` wraps the validate-only workflow with fail-closed audit persistence. Every workflow result is converted into a `PromotionAuditRecord` containing the Den decision identity, submission identity, validation status, summary, decisions, failures, managed local ref, fetched head, and audit timestamp.
+
+Audit behavior:
+
+- `IPromotionAuditStore` is the storage abstraction for workflow audit records.
+- `FilePromotionAuditStore` appends newline-delimited JSON records and creates the parent directory when needed.
+- If audit append succeeds, the audited workflow returns the inner workflow result unchanged.
+- If audit append fails, the audited workflow returns `AuditFailed` and preserves the local ref/fetched head context so operators can investigate without treating an unaudited validation as publishable.
+
+This means validate-only workflow results are not considered publishable unless the result was durably recorded. The current file-backed store is suitable for local service smoke/testing; production wiring can replace or wrap it with Den/Core-backed audit persistence without changing the high-level workflow contract.
+
