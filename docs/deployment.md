@@ -154,3 +154,7 @@ Promotion callers must provide structured override metadata when using scope ove
 - `approved_by`
 
 The service persists used overrides to the audit JSONL record. This makes exceptional publish decisions explainable during central Den inventory/review and avoids undocumented bypasses.
+
+## Final live publish approval runbook
+
+The concrete approval/execution checklist for credential placement and canonical smoke is maintained in [`docs/live-publish-runbook.md`](live-publish-runbook.md). Do not enable live publishing or place canonical push credentials without approval of that semantic plan.
