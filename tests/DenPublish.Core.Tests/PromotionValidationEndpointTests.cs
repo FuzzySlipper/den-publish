@@ -24,6 +24,13 @@ public sealed class PromotionValidationEndpointTests
         Assert.Equal("/var/lib/den-publish/workspaces/den-channels", workflow.CapturedRequest.WorkspacePath);
         Assert.Equal("pub_1424_001", workflow.CapturedRequest.Decision.DecisionId);
         Assert.Equal("sub_1424_001", workflow.CapturedRequest.Submission?.SubmissionId);
+        Assert.Equal(680, workflow.CapturedRequest.Submission?.Review?.ReviewRoundId);
+        Assert.Equal(PublishReviewVerdict.LooksGood, workflow.CapturedRequest.Submission?.Review?.Verdict);
+        var finding = Assert.Single(workflow.CapturedRequest.Submission?.Review?.Findings ?? []);
+        Assert.Equal("finding_1", finding.FindingId);
+        Assert.True(finding.Blocking);
+        Assert.False(finding.Resolved);
+        Assert.Equal("override_scope_1", finding.OverrideId);
         Assert.Equal(["src/DenChannels/"], workflow.CapturedRequest.ScopePolicy.AllowedPathPrefixes);
     }
 
@@ -203,7 +210,15 @@ public sealed class PromotionValidationEndpointTests
                 ChangedFilesClaim: ["src/DenChannels/Bridge.cs"],
                 TestsRun: ["dotnet test --no-restore: passed"],
                 Status: "approved",
-                CreatedAt: DateTimeOffset.Parse("2026-05-14T20:00:00Z")));
+                CreatedAt: DateTimeOffset.Parse("2026-05-14T20:00:00Z"),
+                Review: new PublishReviewApiModel(
+                    ReviewRoundId: 680,
+                    Verdict: "looks_good",
+                    Findings: [new PublishReviewFindingApiModel(
+                        FindingId: "finding_1",
+                        Blocking: true,
+                        Resolved: false,
+                        OverrideId: "override_scope_1")])));
 
     private static GitSha Sha(string value)
     {

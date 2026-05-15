@@ -39,6 +39,38 @@ public sealed class PublishValidationEngine : IPublishEngine
                 new ValidationFailure(PublishFailureCode.ReviewNotApproved, "Submission status must be Approved or PublishRequested before promotion."));
         }
 
+        if (submission.Review is null)
+        {
+            return PublishValidationResult.Rejected(
+                "submission has no matching review state",
+                new ValidationFailure(PublishFailureCode.MissingReview, "Submission must include the Den review round referenced by the publish decision."));
+        }
+
+        if (submission.Review.ReviewRoundId != decision.ReviewRoundId)
+        {
+            return PublishValidationResult.Rejected(
+                "publish decision review round does not match submission review state",
+                new ValidationFailure(PublishFailureCode.MissingReview, "Decision review round id must match the submission review round."));
+        }
+
+        if (submission.Review.Verdict != PublishReviewVerdict.LooksGood)
+        {
+            return PublishValidationResult.Rejected(
+                "submission review verdict does not approve publishing",
+                new ValidationFailure(PublishFailureCode.ReviewNotApproved, "Review verdict must be looks_good before promotion."));
+        }
+
+        var uncoveredBlockingFindings = submission.Review.Findings
+            .Where(finding => finding.Blocking && !finding.Resolved && !IsCoveredByOverride(decision, finding))
+            .ToArray();
+        if (uncoveredBlockingFindings.Length > 0)
+        {
+            var findingIds = string.Join(", ", uncoveredBlockingFindings.Select(finding => finding.FindingId));
+            return PublishValidationResult.Rejected(
+                "submission has unresolved blocking review findings",
+                new ValidationFailure(PublishFailureCode.UnresolvedBlockingFindings, $"Unresolved blocking findings must be resolved or covered by an approved override before promotion: {findingIds}."));
+        }
+
         if (decision.ExpectedHeadCommit != submission.HeadCommit)
         {
             return PublishValidationResult.Rejected(
@@ -50,8 +82,15 @@ public sealed class PublishValidationEngine : IPublishEngine
         [
             "submission identity matches publish decision",
             "submission status is approved for publishing",
+            "submission review round matches publish decision",
+            "submission review verdict is looks_good",
+            "submission has no uncovered blocking findings",
             "submission head matches publish decision"
         ];
+
+        decisions.AddRange(submission.Review.Findings
+            .Where(finding => finding.Blocking && !finding.Resolved && IsCoveredByOverride(decision, finding))
+            .Select(finding => $"blocking finding {finding.FindingId} covered by approved override {finding.OverrideId}"));
 
         if (decision.ValidateOnly)
         {
@@ -60,6 +99,10 @@ public sealed class PublishValidationEngine : IPublishEngine
 
         return PublishValidationResult.Approved("publish decision validated against Den submission contract", decisions);
     }
+
+    private static bool IsCoveredByOverride(PublishDecision decision, PublishReviewFinding finding)
+        => !string.IsNullOrWhiteSpace(finding.OverrideId)
+            && decision.ScopeOverrideIds.Contains(finding.OverrideId, StringComparer.Ordinal);
 
     private static bool DecisionMatchesSubmission(PublishDecision decision, CodeSubmission submission)
         => string.Equals(decision.SubmissionId, submission.SubmissionId, StringComparison.Ordinal)

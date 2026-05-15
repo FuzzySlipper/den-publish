@@ -254,6 +254,11 @@ public static class PromotionValidationEndpoints
             return false;
         }
 
+        if (!TryMapReview(submission.Review, out var review, out failure))
+        {
+            return false;
+        }
+
         domainSubmission = new CodeSubmission(
             SubmissionId: submission.SubmissionId,
             ProjectId: submission.ProjectId,
@@ -276,8 +281,53 @@ public static class PromotionValidationEndpoints
             ChangedFilesClaim: submission.ChangedFilesClaim,
             TestsRun: submission.TestsRun,
             Status: status,
-            CreatedAt: submission.CreatedAt);
+            CreatedAt: submission.CreatedAt,
+            Review: review);
         return true;
+    }
+
+    private static bool TryMapReview(
+        PublishReviewApiModel? review,
+        out PublishReviewState? domainReview,
+        out ValidationFailure? failure)
+    {
+        domainReview = null;
+        failure = null;
+        if (review is null)
+        {
+            return true;
+        }
+
+        if (!TryParseReviewVerdict(review.Verdict, out var verdict))
+        {
+            failure = new ValidationFailure(PublishFailureCode.InvalidRequest, $"Unsupported review verdict: {review.Verdict}.");
+            return false;
+        }
+
+        domainReview = new PublishReviewState(
+            review.ReviewRoundId,
+            verdict,
+            review.Findings
+                .Select(finding => new PublishReviewFinding(
+                    finding.FindingId,
+                    finding.Blocking,
+                    finding.Resolved,
+                    finding.OverrideId))
+                .ToArray());
+        return true;
+    }
+
+    private static bool TryParseReviewVerdict(string value, out PublishReviewVerdict verdict)
+    {
+        verdict = value switch
+        {
+            "looks_good" => PublishReviewVerdict.LooksGood,
+            "changes_requested" => PublishReviewVerdict.ChangesRequested,
+            "follow_up_needed" => PublishReviewVerdict.FollowUpNeeded,
+            "blocked_by_dependency" => PublishReviewVerdict.BlockedByDependency,
+            _ => default
+        };
+        return value is "looks_good" or "changes_requested" or "follow_up_needed" or "blocked_by_dependency";
     }
 
     private static bool TryParseOperation(string value, out PublishOperation operation)
@@ -354,7 +404,19 @@ public sealed record CodeSubmissionApiModel(
     IReadOnlyList<string> ChangedFilesClaim,
     IReadOnlyList<string> TestsRun,
     string Status,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    PublishReviewApiModel? Review = null);
+
+public sealed record PublishReviewApiModel(
+    int ReviewRoundId,
+    string Verdict,
+    IReadOnlyList<PublishReviewFindingApiModel> Findings);
+
+public sealed record PublishReviewFindingApiModel(
+    string FindingId,
+    bool Blocking,
+    bool Resolved,
+    string? OverrideId);
 
 public sealed record PromotionValidationApiResponse(
     bool IsPublishable,

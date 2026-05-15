@@ -146,7 +146,11 @@ public sealed class PublishPolicyValidationEngineTests
             ChangedFilesClaim: ["src/DenChannels/Bridge.cs"],
             TestsRun: ["dotnet test --no-restore: passed"],
             Status: CodeSubmissionStatus.Approved,
-            CreatedAt: DateTimeOffset.Parse("2026-05-14T20:00:00Z"));
+            CreatedAt: DateTimeOffset.Parse("2026-05-14T20:00:00Z"),
+            Review: new PublishReviewState(
+                ReviewRoundId: 680,
+                Verdict: PublishReviewVerdict.LooksGood,
+                Findings: []));
 
     private static GitSha Sha(string value)
     {

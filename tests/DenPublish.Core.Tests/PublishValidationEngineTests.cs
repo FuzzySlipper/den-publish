@@ -63,6 +63,83 @@ public sealed class PublishValidationEngineTests
         Assert.Equal(status == CodeSubmissionStatus.Superseded ? PublishFailureCode.StaleSubmission : PublishFailureCode.ReviewNotApproved, failure.Code);
     }
 
+
+
+    [Fact]
+    public void Validate_RejectsApprovedSubmissionWithoutReviewState()
+    {
+        var submission = ApprovedSubmission(includeReview: false);
+        var decision = Decision();
+        IPublishEngine engine = new PublishValidationEngine();
+
+        var result = engine.Validate(decision, submission);
+
+        Assert.False(result.IsPublishable);
+        var failure = Assert.Single(result.Failures);
+        Assert.Equal(PublishFailureCode.MissingReview, failure.Code);
+    }
+
+    [Fact]
+    public void Validate_RejectsReviewRoundMismatch()
+    {
+        var submission = ApprovedSubmission(review: ApprovedReview(reviewRoundId: 679));
+        var decision = Decision();
+        IPublishEngine engine = new PublishValidationEngine();
+
+        var result = engine.Validate(decision, submission);
+
+        Assert.False(result.IsPublishable);
+        var failure = Assert.Single(result.Failures);
+        Assert.Equal(PublishFailureCode.MissingReview, failure.Code);
+    }
+
+    [Theory]
+    [InlineData(PublishReviewVerdict.ChangesRequested)]
+    [InlineData(PublishReviewVerdict.FollowUpNeeded)]
+    [InlineData(PublishReviewVerdict.BlockedByDependency)]
+    public void Validate_RejectsReviewVerdictsThatAreNotLooksGood(PublishReviewVerdict verdict)
+    {
+        var submission = ApprovedSubmission(review: ApprovedReview(verdict: verdict));
+        var decision = Decision();
+        IPublishEngine engine = new PublishValidationEngine();
+
+        var result = engine.Validate(decision, submission);
+
+        Assert.False(result.IsPublishable);
+        var failure = Assert.Single(result.Failures);
+        Assert.Equal(PublishFailureCode.ReviewNotApproved, failure.Code);
+    }
+
+    [Fact]
+    public void Validate_RejectsUnresolvedBlockingFindingsWithoutOverride()
+    {
+        var finding = new PublishReviewFinding("finding_1", Blocking: true, Resolved: false, OverrideId: "override_scope_1");
+        var submission = ApprovedSubmission(review: ApprovedReview(findings: [finding]));
+        var decision = Decision(scopeOverrideIds: []);
+        IPublishEngine engine = new PublishValidationEngine();
+
+        var result = engine.Validate(decision, submission);
+
+        Assert.False(result.IsPublishable);
+        var failure = Assert.Single(result.Failures);
+        Assert.Equal(PublishFailureCode.UnresolvedBlockingFindings, failure.Code);
+    }
+
+    [Fact]
+    public void Validate_AcceptsUnresolvedBlockingFindingCoveredByDecisionOverride()
+    {
+        var finding = new PublishReviewFinding("finding_1", Blocking: true, Resolved: false, OverrideId: "override_scope_1");
+        var submission = ApprovedSubmission(review: ApprovedReview(findings: [finding]));
+        var decision = Decision(scopeOverrideIds: ["override_scope_1"]);
+        IPublishEngine engine = new PublishValidationEngine();
+
+        var result = engine.Validate(decision, submission);
+
+        Assert.True(result.IsPublishable);
+        Assert.Contains("blocking finding finding_1 covered by approved override override_scope_1", result.Decisions);
+    }
+
+
     [Fact]
     public void Validate_AcceptsMatchingApprovedSubmissionAndValidateOnlyDecision()
     {
@@ -81,7 +158,8 @@ public sealed class PublishValidationEngineTests
     private static PublishDecision Decision(
         GitSha? expectedHeadCommit = null,
         bool validateOnly = false,
-        string submissionId = "sub_1424_001")
+        string submissionId = "sub_1424_001",
+        IReadOnlyList<string>? scopeOverrideIds = null)
         => new(
             DecisionId: "pub_1424_001",
             ProjectId: "den-channels",
@@ -94,13 +172,15 @@ public sealed class PublishValidationEngineTests
             ExpectedHeadCommit: expectedHeadCommit ?? Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
             ExpectedBaseBranch: "main",
             ReviewRoundId: 680,
-            ScopeOverrideIds: [],
+            ScopeOverrideIds: scopeOverrideIds ?? [],
             ValidateOnly: validateOnly,
             CreatedAt: DateTimeOffset.Parse("2026-05-14T20:05:00Z"));
 
     private static CodeSubmission ApprovedSubmission(
         GitSha? headCommit = null,
-        CodeSubmissionStatus status = CodeSubmissionStatus.Approved)
+        CodeSubmissionStatus status = CodeSubmissionStatus.Approved,
+        PublishReviewState? review = null,
+        bool includeReview = true)
         => new(
             SubmissionId: "sub_1424_001",
             ProjectId: "den-channels",
@@ -123,7 +203,15 @@ public sealed class PublishValidationEngineTests
             ChangedFilesClaim: ["src/DenChannels/Bridge.cs"],
             TestsRun: ["dotnet test --no-restore: passed"],
             Status: status,
-            CreatedAt: DateTimeOffset.Parse("2026-05-14T20:00:00Z"));
+            CreatedAt: DateTimeOffset.Parse("2026-05-14T20:00:00Z"),
+            Review: includeReview ? (review ?? ApprovedReview()) : null);
+
+
+    private static PublishReviewState ApprovedReview(
+        int reviewRoundId = 680,
+        PublishReviewVerdict verdict = PublishReviewVerdict.LooksGood,
+        IReadOnlyList<PublishReviewFinding>? findings = null)
+        => new(reviewRoundId, verdict, findings ?? []);
 
     private static GitSha Sha(string value)
     {

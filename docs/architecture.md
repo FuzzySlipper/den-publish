@@ -246,3 +246,10 @@ The persistent den-k8plus service remains deployed without `DenPublish__Publishi
 Sensitive or credential-bearing values must not be returned raw. Canonical remote URLs are reported with `value="[redacted]"`, a short fingerprint for drift detection, and a display string with userinfo removed where parsing permits it. Live publishing remains explicit and visible through the `DenPublish:Publishing:Enabled` status.
 
 This endpoint is intentionally local-service telemetry, not a configuration writer. Centralized Den configuration should eventually collect and compare these service-reported contracts rather than relying on scattered shell/env inspection.
+
+
+## Den review-state validation
+
+Promotion validation now requires explicit Den review state on each submission. A submission being marked `approved` or `publish_requested` is necessary but not sufficient: the submission must also carry the review round referenced by the publish decision, the review verdict must be `looks_good`, and blocking review findings must either be resolved or covered by a decision-scoped override id.
+
+This keeps the trusted publisher from promoting work based only on stale status labels. Override ids are decision-local audit inputs: an unresolved blocking finding with an override id is publishable only when that same override id appears in `decision.scope_override_ids`; otherwise validation fails closed with `unresolved_blocking_findings`.

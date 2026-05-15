@@ -19,6 +19,25 @@ public enum PublishOperation
     FastForwardMain
 }
 
+public enum PublishReviewVerdict
+{
+    LooksGood,
+    ChangesRequested,
+    FollowUpNeeded,
+    BlockedByDependency
+}
+
+public sealed record PublishReviewFinding(
+    string FindingId,
+    bool Blocking,
+    bool Resolved,
+    string? OverrideId);
+
+public sealed record PublishReviewState(
+    int ReviewRoundId,
+    PublishReviewVerdict Verdict,
+    IReadOnlyList<PublishReviewFinding> Findings);
+
 public sealed record CodeSubmission(
     string SubmissionId,
     string ProjectId,
@@ -41,7 +60,8 @@ public sealed record CodeSubmission(
     IReadOnlyList<string> ChangedFilesClaim,
     IReadOnlyList<string> TestsRun,
     CodeSubmissionStatus Status,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    PublishReviewState? Review = null);
 
 public sealed record PublishDecision(
     string DecisionId,

@@ -123,3 +123,10 @@ curl -fsS http://127.0.0.1:5090/config/status
 The response follows `den-publish-runtime-config-v1` and reports workspace root, audit file path, canonical remote policy, and live-publishing enablement. Canonical remote values are redacted and include only a fingerprint/display form suitable for drift checks. Missing production-required settings produce warnings.
 
 This endpoint is the preferred integration point for a future central Den configuration panel. The panel should query service-owned config status surfaces and compare them against Den-owned desired state, rather than depending on operators remembering every env file path.
+
+
+### Publish request review state
+
+Production publish and dry-run requests must include Den review state in the submission payload. The publisher validates that `submission.review.review_round_id` matches `decision.review_round_id`, the verdict is `looks_good`, and any unresolved blocking findings are either resolved or covered by explicit `decision.scope_override_ids`.
+
+Treat missing review state as a deployment/request bug. The service fails closed with `missing_review`; do not bypass this by loosening submission status alone.
