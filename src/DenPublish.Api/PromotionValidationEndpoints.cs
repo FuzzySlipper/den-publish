@@ -6,25 +6,38 @@ public static class PromotionValidationEndpoints
 {
     public static IEndpointRouteBuilder MapPromotionValidationEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/promotion/validate", static (PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow) =>
+        app.MapPost("/promotion/validate", static (PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow, IWorkspacePathResolver workspacePathResolver) =>
         {
-            var response = Validate(request, workflow);
+            var response = Validate(request, workflow, workspacePathResolver);
             return response.IsPublishable ? Results.Ok(response) : Results.BadRequest(response);
         });
-        app.MapPost("/promotion/dry-run", static (PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow, IPromotionPublisher publisher) =>
+        app.MapPost("/promotion/dry-run", static (PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow, IPromotionPublisher publisher, IWorkspacePathResolver workspacePathResolver) =>
         {
-            var response = ValidateAndDryRun(request, workflow, publisher);
+            var response = ValidateAndDryRun(request, workflow, publisher, workspacePathResolver);
             return response.Succeeded ? Results.Ok(response) : Results.BadRequest(response);
         });
         return app;
     }
 
     public static PromotionValidationApiResponse Validate(PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow)
+        => Validate(request, workflow, RequestWorkspacePathResolver.Instance);
+
+    public static PromotionValidationApiResponse Validate(
+        PromotionValidationApiRequest request,
+        IPromotionValidationWorkflow workflow,
+        IWorkspacePathResolver workspacePathResolver)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(workflow);
+        ArgumentNullException.ThrowIfNull(workspacePathResolver);
 
-        if (!TryMapRequest(request, out var domainRequest, out var failure))
+        var workspacePath = workspacePathResolver.Resolve(request);
+        if (!workspacePath.Succeeded)
+        {
+            return PromotionValidationApiResponse.FromResult(MalformedRequestResult(workspacePath.Failure!));
+        }
+
+        if (!TryMapRequest(request, workspacePath.WorkspacePath!, out var domainRequest, out var failure))
         {
             return PromotionValidationApiResponse.FromResult(MalformedRequestResult(failure!));
         }
@@ -37,12 +50,27 @@ public static class PromotionValidationEndpoints
         PromotionValidationApiRequest request,
         IPromotionValidationWorkflow workflow,
         IPromotionPublisher publisher)
+        => ValidateAndDryRun(request, workflow, publisher, RequestWorkspacePathResolver.Instance);
+
+    public static PromotionDryRunApiResponse ValidateAndDryRun(
+        PromotionValidationApiRequest request,
+        IPromotionValidationWorkflow workflow,
+        IPromotionPublisher publisher,
+        IWorkspacePathResolver workspacePathResolver)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(workflow);
         ArgumentNullException.ThrowIfNull(publisher);
+        ArgumentNullException.ThrowIfNull(workspacePathResolver);
 
-        if (!TryMapRequest(request, out var domainRequest, out var failure))
+        var workspacePath = workspacePathResolver.Resolve(request);
+        if (!workspacePath.Succeeded)
+        {
+            var malformed = MalformedRequestResult(workspacePath.Failure!);
+            return PromotionDryRunApiResponse.FromValidationOnly(malformed);
+        }
+
+        if (!TryMapRequest(request, workspacePath.WorkspacePath!, out var domainRequest, out var failure))
         {
             var malformed = MalformedRequestResult(failure!);
             return PromotionDryRunApiResponse.FromValidationOnly(malformed);
@@ -69,6 +97,7 @@ public static class PromotionValidationEndpoints
 
     private static bool TryMapRequest(
         PromotionValidationApiRequest request,
+        string workspacePath,
         out PromotionValidationRequest? domainRequest,
         out ValidationFailure? failure)
     {
@@ -115,7 +144,7 @@ public static class PromotionValidationEndpoints
         domainRequest = new PromotionValidationRequest(
             decision,
             submission,
-            request.WorkspacePath,
+            workspacePath,
             new ChangedFileScopePolicy(request.AllowedPathPrefixes));
         return true;
     }

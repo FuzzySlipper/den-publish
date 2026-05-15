@@ -27,6 +27,97 @@ public sealed class PromotionValidationEndpointTests
         Assert.Equal(["src/DenChannels/"], workflow.CapturedRequest.ScopePolicy.AllowedPathPrefixes);
     }
 
+
+
+    [Fact]
+    public void Validate_UsesWorkspaceResolverInsteadOfCallerProvidedPath()
+    {
+        var workflow = new RecordingWorkflow(new PromotionValidationWorkflowResult(
+            PublishValidationResult.Approved("workflow ok"),
+            LocalRef: null,
+            FetchedHeadCommit: Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")));
+        var request = Request() with { WorkspacePath = "/tmp/worker-controlled-shim" };
+        var resolver = new RecordingWorkspacePathResolver(WorkspacePathResolutionResult.Resolved(
+            "/home/agents/runtime/den-publish/workspaces/den-channels/tasks/1416/submissions/sub_1424_001"));
+
+        var response = PromotionValidationEndpoints.Validate(request, workflow, resolver);
+
+        Assert.True(response.IsPublishable);
+        Assert.NotNull(workflow.CapturedRequest);
+        Assert.Equal("/home/agents/runtime/den-publish/workspaces/den-channels/tasks/1416/submissions/sub_1424_001", workflow.CapturedRequest.WorkspacePath);
+        Assert.Same(request, resolver.CapturedRequest);
+    }
+
+    [Fact]
+    public void Validate_ReturnsInvalidRequestWhenWorkspaceResolverRejects()
+    {
+        var workflow = new RecordingWorkflow(new PromotionValidationWorkflowResult(
+            PublishValidationResult.Approved("workflow ok"),
+            LocalRef: null,
+            FetchedHeadCommit: Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")));
+        var resolver = new RecordingWorkspacePathResolver(WorkspacePathResolutionResult.Failed(
+            new ValidationFailure(PublishFailureCode.InvalidRequest, "unsafe workspace identity")));
+
+        var response = PromotionValidationEndpoints.Validate(Request(), workflow, resolver);
+
+        Assert.False(response.IsPublishable);
+        Assert.Equal("rejected", response.Status);
+        Assert.Equal("invalid_request", Assert.Single(response.Failures).Code);
+        Assert.Null(workflow.CapturedRequest);
+    }
+
+    [Theory]
+    [InlineData("/home/agents/runtime/den-publish/workspaces", "den-channels", 1416, "sub_1424_001", "/home/agents/runtime/den-publish/workspaces/den-channels/tasks/1416/submissions/sub_1424_001")]
+    [InlineData("/home/agents/runtime/den-publish/workspaces/", "den_channels", 7, "sub-abc", "/home/agents/runtime/den-publish/workspaces/den_channels/tasks/7/submissions/sub-abc")]
+    public void ConfiguredWorkspacePathResolver_DerivesServiceOwnedPath(
+        string root,
+        string projectId,
+        int taskId,
+        string submissionId,
+        string expectedPath)
+    {
+        var request = Request() with
+        {
+            WorkspacePath = "/tmp/caller-controlled",
+            Decision = Request().Decision with
+            {
+                ProjectId = projectId,
+                TaskId = taskId,
+                SubmissionId = submissionId
+            }
+        };
+        var resolver = new ConfiguredWorkspacePathResolver(root);
+
+        var result = resolver.Resolve(request);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(expectedPath, result.WorkspacePath);
+    }
+
+    [Theory]
+    [InlineData("../den-channels", "sub_1424_001")]
+    [InlineData("den/channels", "sub_1424_001")]
+    [InlineData("den-channels", "../sub_1424_001")]
+    [InlineData("den-channels", "sub/1424")]
+    public void ConfiguredWorkspacePathResolver_RejectsUnsafePathComponents(string projectId, string submissionId)
+    {
+        var request = Request() with
+        {
+            Decision = Request().Decision with
+            {
+                ProjectId = projectId,
+                SubmissionId = submissionId
+            }
+        };
+        var resolver = new ConfiguredWorkspacePathResolver("/home/agents/runtime/den-publish/workspaces");
+
+        var result = resolver.Resolve(request);
+
+        Assert.False(result.Succeeded);
+        Assert.Null(result.WorkspacePath);
+        Assert.Equal(PublishFailureCode.InvalidRequest, result.Failure?.Code);
+    }
+
     [Fact]
     public void Validate_ReturnsInvalidRequestWithoutCallingWorkflowWhenShaIsMalformed()
     {
@@ -45,6 +136,19 @@ public sealed class PromotionValidationEndpointTests
         Assert.Equal("rejected", response.Status);
         Assert.Equal("invalid_request", Assert.Single(response.Failures).Code);
         Assert.Null(workflow.CapturedRequest);
+    }
+
+
+
+    private sealed class RecordingWorkspacePathResolver(WorkspacePathResolutionResult result) : IWorkspacePathResolver
+    {
+        public PromotionValidationApiRequest? CapturedRequest { get; private set; }
+
+        public WorkspacePathResolutionResult Resolve(PromotionValidationApiRequest request)
+        {
+            CapturedRequest = request;
+            return result;
+        }
     }
 
     private sealed class RecordingWorkflow(PromotionValidationWorkflowResult result) : IPromotionValidationWorkflow

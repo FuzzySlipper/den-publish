@@ -203,3 +203,15 @@ This endpoint is intended for local/service validate-only smoke before live publ
 
 This is intentionally conservative. The audit record remains the durable idempotency source for validate-only promotion decisions, preventing accidental double appends from client retries while failing closed on suspicious decision-id reuse.
 
+## Service-owned workspace root slice
+
+`DenPublish.Api` now supports a configured service-owned workspace boundary through `DenPublish:WorkspaceRoot`. When this setting is present, API endpoints derive the validation workspace from Den-owned identity fields instead of trusting the caller-provided `WorkspacePath` field:
+
+```text
+<WorkspaceRoot>/<ProjectId>/tasks/<TaskId>/submissions/<SubmissionId>
+```
+
+The configured resolver rejects unsafe path components such as `..`, `/`, or `\` in project/submission identifiers. This keeps remote workers and cross-machine callers at the Den decision/submission layer: they provide code-gate metadata and exact SHAs, while `den-publish` controls where Git objects are fetched and verified locally.
+
+For developer/test use without `DenPublish:WorkspaceRoot`, the API still supports the request-provided workspace path. Production/user-service deployment should set `DenPublish:WorkspaceRoot` to an agent-owned durable path and should not rely on caller-provided filesystem paths.
+

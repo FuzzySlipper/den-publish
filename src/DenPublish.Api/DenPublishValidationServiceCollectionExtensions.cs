@@ -15,6 +15,7 @@ public static class DenPublishValidationServiceCollectionExtensions
         services.AddSingleton<IChangedFileScopeValidator, GitChangedFileScopeValidator>();
         services.AddSingleton<ISubmissionAncestryValidator, GitSubmissionAncestryValidator>();
         services.AddSingleton<IPromotionPublisher, DryRunPromotionPublisher>();
+        services.AddSingleton<IWorkspacePathResolver>(_ => ReadWorkspacePathResolver(configuration));
 
         services.AddSingleton<IPromotionAuditStore>(_ => new FilePromotionAuditStore(ReadAuditFilePath(configuration)));
         services.AddSingleton<IPromotionValidationWorkflow>(provider =>
@@ -50,6 +51,14 @@ public static class DenPublishValidationServiceCollectionExtensions
             canonicalRemoteUrl,
             pushBranchPrefixes,
             fastForwardBranches);
+    }
+
+    private static IWorkspacePathResolver ReadWorkspacePathResolver(IConfiguration configuration)
+    {
+        var workspaceRoot = configuration["DenPublish:WorkspaceRoot"];
+        return string.IsNullOrWhiteSpace(workspaceRoot)
+            ? RequestWorkspacePathResolver.Instance
+            : new ConfiguredWorkspacePathResolver(workspaceRoot);
     }
 
     private static string ReadAuditFilePath(IConfiguration configuration)

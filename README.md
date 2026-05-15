@@ -21,3 +21,20 @@ dotnet run --project src/DenPublish.Api
 ## Design source of truth
 
 Den document: `den-publish/den-code-gate-den-publish-workflow-contract-1420`.
+
+## Service-owned workspace configuration
+
+For production-style runs, configure `DenPublish:WorkspaceRoot` so `den-publish` derives its own managed Git workspace path instead of accepting a worker-provided filesystem path:
+
+```bash
+DenPublish__WorkspaceRoot=/home/agents/runtime/den-publish/workspaces DenPublish__AuditFilePath=/home/agents/runtime/den-publish/audit/promotion-validation.jsonl DenPublish__TargetPolicy__CanonicalRemoteUrl=git@github.com:FuzzySlipper/<repo>.git ASPNETCORE_URLS=http://127.0.0.1:5090 dotnet run --project src/DenPublish.Api --no-launch-profile
+```
+
+When `WorkspaceRoot` is set, request `WorkspacePath` values are ignored and the service derives:
+
+```text
+<WorkspaceRoot>/<ProjectId>/tasks/<TaskId>/submissions/<SubmissionId>
+```
+
+Do not add canonical push credentials or enable persistent service deployment until validate-only smoke and deployment approval have completed.
+
