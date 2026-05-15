@@ -5,7 +5,22 @@ namespace DenPublish.Core;
 
 public interface IPromotionAuditStore
 {
+    PromotionAuditLookupResult FindByDecisionId(string decisionId);
     PromotionAuditAppendResult Append(PromotionAuditRecord record);
+}
+
+public sealed record PromotionAuditLookupResult(bool Succeeded, PromotionAuditRecord? Record, string ErrorMessage)
+{
+    public bool Found => Record is not null;
+
+    public static PromotionAuditLookupResult Missing()
+        => new(true, null, string.Empty);
+
+    public static PromotionAuditLookupResult FoundRecord(PromotionAuditRecord record)
+        => new(true, record, string.Empty);
+
+    public static PromotionAuditLookupResult Failed(string errorMessage)
+        => new(false, null, errorMessage);
 }
 
 public sealed record PromotionAuditAppendResult(bool Succeeded, string ErrorMessage)
@@ -41,6 +56,24 @@ public sealed class AuditedPromotionValidationWorkflow(
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        var existingAudit = auditStore.FindByDecisionId(request.Decision.DecisionId);
+        if (!existingAudit.Succeeded)
+        {
+            return new PromotionValidationWorkflowResult(
+                PublishValidationResult.Failed(
+                    "promotion validation audit lookup failed",
+                    new ValidationFailure(
+                        PublishFailureCode.AuditFailed,
+                        $"Promotion validation audit lookup failed: {existingAudit.ErrorMessage}")),
+                LocalRef: null,
+                FetchedHeadCommit: null);
+        }
+
+        if (existingAudit.Record is not null)
+        {
+            return ReplayOrRejectConflict(request, existingAudit.Record);
+        }
+
         var result = inner.Validate(request);
         var auditRecord = ToAuditRecord(request, result, _now());
         var appendResult = auditStore.Append(auditRecord);
@@ -58,6 +91,51 @@ public sealed class AuditedPromotionValidationWorkflow(
                     $"Promotion validation result was not persisted to audit storage: {appendResult.ErrorMessage}")),
             result.LocalRef,
             result.FetchedHeadCommit);
+    }
+
+    private static PromotionValidationWorkflowResult ReplayOrRejectConflict(
+        PromotionValidationRequest request,
+        PromotionAuditRecord record)
+    {
+        var expectedHead = request.Decision.ExpectedHeadCommit;
+        var conflicts = new List<string>();
+
+        if (!string.Equals(record.ProjectId, request.Decision.ProjectId, StringComparison.Ordinal))
+        {
+            conflicts.Add("project id");
+        }
+
+        if (record.TaskId != request.Decision.TaskId)
+        {
+            conflicts.Add("task id");
+        }
+
+        if (!string.Equals(record.SubmissionId, request.Decision.SubmissionId, StringComparison.Ordinal))
+        {
+            conflicts.Add("submission id");
+        }
+
+        if (record.FetchedHeadCommit is not null && record.FetchedHeadCommit != expectedHead)
+        {
+            conflicts.Add("expected head commit");
+        }
+
+        if (conflicts.Count > 0)
+        {
+            return new PromotionValidationWorkflowResult(
+                PublishValidationResult.Rejected(
+                    "promotion decision replay conflicts with existing audit record",
+                    new ValidationFailure(
+                        PublishFailureCode.InvalidRequest,
+                        $"Decision id '{request.Decision.DecisionId}' already has an audit record with different {string.Join(", ", conflicts)}.")),
+                record.LocalRef,
+                record.FetchedHeadCommit);
+        }
+
+        return new PromotionValidationWorkflowResult(
+            new PublishValidationResult(record.Status, $"replayed audited result: {record.Summary}", record.Decisions, record.Failures),
+            record.LocalRef,
+            record.FetchedHeadCommit);
     }
 
     private static PromotionAuditRecord ToAuditRecord(
@@ -89,6 +167,45 @@ public sealed class FilePromotionAuditStore(string auditFilePath) : IPromotionAu
             new GitShaJsonConverter()
         }
     };
+
+    public PromotionAuditLookupResult FindByDecisionId(string decisionId)
+    {
+        if (string.IsNullOrWhiteSpace(decisionId))
+        {
+            return PromotionAuditLookupResult.Missing();
+        }
+
+        try
+        {
+            if (!File.Exists(auditFilePath))
+            {
+                return PromotionAuditLookupResult.Missing();
+            }
+
+            PromotionAuditRecord? latestMatch = null;
+            foreach (var line in File.ReadLines(auditFilePath))
+            {
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                var record = JsonSerializer.Deserialize<PromotionAuditRecord>(line, SerializerOptions);
+                if (record is not null && string.Equals(record.DecisionId, decisionId, StringComparison.Ordinal))
+                {
+                    latestMatch = record;
+                }
+            }
+
+            return latestMatch is null
+                ? PromotionAuditLookupResult.Missing()
+                : PromotionAuditLookupResult.FoundRecord(latestMatch);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException or JsonException)
+        {
+            return PromotionAuditLookupResult.Failed(ex.Message);
+        }
+    }
 
     public PromotionAuditAppendResult Append(PromotionAuditRecord record)
     {

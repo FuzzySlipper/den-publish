@@ -62,6 +62,77 @@ public sealed class PromotionAuditTests
         Assert.Equal("refs/den-publish/submissions/sub_1424_001", result.LocalRef);
     }
 
+
+
+    [Fact]
+    public void Validate_ReplaysExistingAuditRecordWithoutCallingInnerOrAppendingDuplicate()
+    {
+        var decision = Decision();
+        var submission = ApprovedSubmission();
+        var existing = new PromotionAuditRecord(
+            RecordedAt: DateTimeOffset.Parse("2026-05-14T20:40:00Z"),
+            DecisionId: decision.DecisionId,
+            ProjectId: decision.ProjectId,
+            TaskId: decision.TaskId,
+            SubmissionId: decision.SubmissionId,
+            Status: PublishValidationStatus.Validated,
+            Summary: "workflow ok",
+            Decisions: ["all checks passed"],
+            Failures: [],
+            LocalRef: "refs/den-publish/submissions/sub_1424_001",
+            FetchedHeadCommit: decision.ExpectedHeadCommit);
+        var inner = new RecordingPromotionWorkflow(new PromotionValidationWorkflowResult(
+            PublishValidationResult.Failed("inner should not run", new ValidationFailure(PublishFailureCode.CodeGateFetchFailed, "boom")),
+            LocalRef: null,
+            FetchedHeadCommit: null));
+        var audit = new RecordingAuditStore(PromotionAuditAppendResult.Appended(), existing);
+        var workflow = new AuditedPromotionValidationWorkflow(inner, audit);
+
+        var result = workflow.Validate(new PromotionValidationRequest(decision, submission, "/workspace", new ChangedFileScopePolicy(["src/DenChannels/"])));
+
+        Assert.True(result.IsPublishable);
+        Assert.Equal(PublishValidationStatus.Validated, result.Validation.Status);
+        Assert.Equal("replayed audited result: workflow ok", result.Validation.Summary);
+        Assert.Equal(existing.LocalRef, result.LocalRef);
+        Assert.Equal(existing.FetchedHeadCommit, result.FetchedHeadCommit);
+        Assert.Equal(0, inner.CallCount);
+        Assert.Empty(audit.Records);
+    }
+
+    [Fact]
+    public void Validate_RejectsConflictingDecisionReplayWithoutCallingInnerOrAppendingDuplicate()
+    {
+        var decision = Decision();
+        var existing = new PromotionAuditRecord(
+            RecordedAt: DateTimeOffset.Parse("2026-05-14T20:40:00Z"),
+            DecisionId: decision.DecisionId,
+            ProjectId: decision.ProjectId,
+            TaskId: decision.TaskId,
+            SubmissionId: decision.SubmissionId,
+            Status: PublishValidationStatus.Validated,
+            Summary: "workflow ok",
+            Decisions: ["all checks passed"],
+            Failures: [],
+            LocalRef: "refs/den-publish/submissions/sub_1424_001",
+            FetchedHeadCommit: Sha("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"));
+        var inner = new RecordingPromotionWorkflow(new PromotionValidationWorkflowResult(
+            PublishValidationResult.Approved("inner should not run"),
+            LocalRef: null,
+            FetchedHeadCommit: null));
+        var audit = new RecordingAuditStore(PromotionAuditAppendResult.Appended(), existing);
+        var workflow = new AuditedPromotionValidationWorkflow(inner, audit);
+
+        var result = workflow.Validate(new PromotionValidationRequest(decision, ApprovedSubmission(), "/workspace", new ChangedFileScopePolicy(["src/DenChannels/"])));
+
+        Assert.False(result.IsPublishable);
+        Assert.Equal(PublishValidationStatus.Rejected, result.Validation.Status);
+        var failure = Assert.Single(result.Validation.Failures);
+        Assert.Equal(PublishFailureCode.InvalidRequest, failure.Code);
+        Assert.Contains("already has an audit record", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(0, inner.CallCount);
+        Assert.Empty(audit.Records);
+    }
+
     [Fact]
     public void FileAuditStore_AppendsJsonLineAndCreatesParentDirectory()
     {
@@ -89,22 +160,36 @@ public sealed class PromotionAuditTests
         Assert.Equal("sub_1424_001", doc.RootElement.GetProperty("submission_id").GetString());
         Assert.Equal("validated", doc.RootElement.GetProperty("status").GetString());
         Assert.Equal("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", doc.RootElement.GetProperty("fetched_head_commit").GetString());
+
+        var lookup = store.FindByDecisionId("pub_1424_001");
+        Assert.True(lookup.Succeeded);
+        Assert.NotNull(lookup.Record);
+        Assert.Equal("pub_1424_001", lookup.Record.DecisionId);
+        Assert.Equal(Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), lookup.Record.FetchedHeadCommit);
+
     }
 
     private sealed class RecordingPromotionWorkflow(PromotionValidationWorkflowResult result) : IPromotionValidationWorkflow
     {
         public PromotionValidationRequest? CapturedRequest { get; private set; }
+        public int CallCount { get; private set; }
 
         public PromotionValidationWorkflowResult Validate(PromotionValidationRequest request)
         {
+            CallCount++;
             CapturedRequest = request;
             return result;
         }
     }
 
-    private sealed class RecordingAuditStore(PromotionAuditAppendResult appendResult) : IPromotionAuditStore
+    private sealed class RecordingAuditStore(PromotionAuditAppendResult appendResult, PromotionAuditRecord? existing = null) : IPromotionAuditStore
     {
         public List<PromotionAuditRecord> Records { get; } = [];
+
+        public PromotionAuditLookupResult FindByDecisionId(string decisionId)
+            => existing is not null && string.Equals(existing.DecisionId, decisionId, StringComparison.Ordinal)
+                ? PromotionAuditLookupResult.FoundRecord(existing)
+                : PromotionAuditLookupResult.Missing();
 
         public PromotionAuditAppendResult Append(PromotionAuditRecord record)
         {

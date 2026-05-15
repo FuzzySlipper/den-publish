@@ -197,3 +197,9 @@ Endpoint behavior:
 
 This endpoint is intended for local/service validate-only smoke before live publisher credentials exist. It is not a deployment or service configuration change by itself.
 
+## Audit idempotency and decision replay protection slice
+
+`AuditedPromotionValidationWorkflow` now checks audit storage for an existing `DecisionId` before re-running validation. If the decision id has already been audited with matching project/task/submission/head metadata, the workflow replays the stored audit result without calling the inner Git-backed validation pipeline or appending another JSONL record. If the same decision id is replayed with conflicting project, task, submission, or expected head metadata, the workflow rejects the request with `InvalidRequest` and does not re-run Git validation.
+
+This is intentionally conservative. The audit record remains the durable idempotency source for validate-only promotion decisions, preventing accidental double appends from client retries while failing closed on suspicious decision-id reuse.
+
