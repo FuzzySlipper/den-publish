@@ -72,3 +72,16 @@ The Git-facing boundary is intentionally narrow:
 - `CodeGatePublishValidationEngine` rejects with `CodeGateHeadMismatch` if the resolved remote head differs from either the Den submission head or the publish decision's expected head.
 
 Later slices can add workspace object fetch, scope diff validation, fast-forward checks, audit persistence, and the final credential-backed push path behind the same fail-closed high-level boundary.
+
+## Target policy validation slice
+
+`PublishPolicyValidationEngine` adds configured target policy checks after the Den contract validator and before any code-gate/canonical Git side effects. It is still pure validation: no workspace mutation, no push, and no credential lookup.
+
+The policy boundary is:
+
+- `PublishTargetPolicy.TargetRemoteName` and `CanonicalRemoteUrl` define the only configured canonical target accepted for this project.
+- `PushBranchPrefixes` allows safe task-branch publication such as `task/...` for `PushBranch` decisions.
+- `FastForwardBranches` explicitly lists protected branches such as `main` that may be fast-forwarded by `FastForwardMain` decisions.
+- Target branch names must pass a conservative Git branch safety check before they are used in service-owned argv-based Git commands.
+
+Policy failures are reported as `CanonicalRemoteMismatch`, `InvalidRequest`, or `ScopeViolation` so orchestration can distinguish configuration drift, malformed decisions, and disallowed promotion scope.
