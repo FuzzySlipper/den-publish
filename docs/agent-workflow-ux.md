@@ -8,12 +8,15 @@ Source-of-truth documents:
 - Code-gate deployment result: `den-publish/den-code-gate-forgejo-deployment-result-1422`
 - Worker substrate policy: `_global/agent-worker-substrate-policy`
 - Review loop policy: `_global/agent-review-loop-policy`
+- Code promotion policy: `_global/agent-code-promotion-policy`
+- Project metadata inventory: `den-publish/promotion-project-metadata-1433`
 
 ## Safety boundary
 
 - Coder workers may push candidate commits to `den-code-gate` only.
 - Reviewer workers fetch exact immutable submission refs from `den-code-gate` and never need canonical/GitHub push credentials.
 - Orchestrators approve high-level Den decisions; they do not type or execute raw `git push` promotion commands.
+- Orchestrators should use the Den Core field-based `den-publish` dry-run facade when available; they should not hand-author raw `DenPublish.Api` JSON for normal workflow execution.
 - `den-publish` is the only component that validates and performs canonical promotion.
 - Live publishing remains an explicit operator gate. The real repo/task prep flow should use `/promotion/dry-run` until a concrete publish approval says otherwise.
 
@@ -22,13 +25,14 @@ Source-of-truth documents:
 Before selecting a real project task for #1427 or later E2E smoke, confirm:
 
 1. The project has a canonical remote URL accepted by `den-publish` target policy.
-2. `den-code-gate` has or can create a repository for the project.
-3. The coder can report a complete `den_code_submission` packet with exact `base_commit`, `head_commit`, immutable `ingress_ref`, tests, and changed-file claim.
-4. The reviewer context packet names the same `submission_id`, `ingress_ref`, `head_commit`, and `base_commit`.
-5. The Den review round records or references the exact reviewed `head_commit`.
-6. The orchestrator decision packet names the exact reviewed `head_commit`, `review_round_id`, and structured `scope_overrides[]` when any blocking finding is intentionally covered.
-7. `/promotion/dry-run` succeeds before `/promotion/publish` is considered.
-8. Live `/promotion/publish` is enabled only for the scoped smoke window and disabled afterward.
+2. The project has secret-free promotion metadata in `config/promotion-projects.json`; run `python3 scripts/check-promotion-metadata-drift.py --project <project_id>` before dry-run if readiness is uncertain.
+3. `den-code-gate` has or can create a repository for the project.
+4. The coder can report a complete `den_code_submission` packet with exact `base_commit`, `head_commit`, immutable `ingress_ref`, tests, and changed-file claim.
+5. The reviewer context packet names the same `submission_id`, `ingress_ref`, `head_commit`, and `base_commit`.
+6. The Den review round records or references the exact reviewed `head_commit`.
+7. The orchestrator decision packet names the exact reviewed `head_commit`, `review_round_id`, and structured `scope_overrides[]` when any blocking finding is intentionally covered.
+8. `/promotion/dry-run` succeeds before `/promotion/publish` is considered.
+9. Live `/promotion/publish` is enabled only for the scoped smoke window and disabled afterward.
 
 ## Coder completion packet
 
@@ -48,6 +52,14 @@ Important rules:
 ## Reviewer context packet
 
 Template: `templates/agent-workflow/reviewer-context-packet.template.md`
+
+Promotion-aware wake/context packet template: `templates/agent-workflow/agent-context-packet.template.md`
+
+Generate a project-specific packet with:
+
+```bash
+python3 scripts/render-agent-context-packet.py --project den-channels --task-id <task-id>
+```
 
 The reviewer packet must tell the reviewer to fetch the exact immutable `ingress_ref` and verify the fetched SHA equals `head_commit` before reviewing the diff. A reviewer verdict is only applicable to the named `submission_id` and `head_commit`.
 
@@ -107,3 +119,7 @@ Fail closed and request rework or operator intervention when:
 - blocking findings are unresolved and not covered by a structured override reason;
 - `/promotion/dry-run` reports any validation failure;
 - live publish is enabled outside a scoped, documented approval window.
+
+## Global guidance rollout (#1434)
+
+The authoritative global promotion guidance is `_global/agent-code-promotion-policy`. Agents should treat Den Core `publish_reviewed_branch` and `publish_worker_branch` as legacy/compatibility for new cross-machine development. Normal new work should produce code-gate submission packets, review exact immutable refs, then use the Den Core field-based den-publish dry-run facade before any approval-gated live publish.

@@ -17,6 +17,17 @@ REQUIRED_DOC_TERMS = [
     '/promotion/dry-run',
     'validateOnly',
     'Orchestrators approve high-level Den decisions',
+    '_global/agent-code-promotion-policy',
+    'Den Core field-based `den-publish` dry-run facade',
+    'scripts/check-promotion-metadata-drift.py --project <project_id>',
+]
+
+REQUIRED_AGENT_CONTEXT_TERMS = [
+    'worker -> den-code-gate -> Den review -> Den Core den-publish facade -> den-publish /promotion/dry-run',
+    'Legacy Den Core `publish_reviewed_branch` / `publish_worker_branch` are compatibility only',
+    'submission=sub_example_1434 ingress_ref=refs/heads/submissions/den-channels/tasks/1416/runs/run-example-1434/attempt-001',
+    'python3 scripts/check-promotion-metadata-drift.py --project den-channels',
+    'Direct `DenPublish.Api` JSON uses camelCase only',
 ]
 
 REQUIRED_JSON_PATHS = {
@@ -121,6 +132,33 @@ def main() -> None:
     checklist = (ROOT / 'templates' / 'agent-workflow' / 'real-task-test-checklist.md').read_text(encoding='utf-8')
     for term in ['livePublishing.enabled=false', 'ssh -F /dev/null', '/promotion/publish', 'disable live publishing']:
         require(term in checklist, f'missing checklist term: {term}')
+
+    context_template = (ROOT / 'templates' / 'agent-workflow' / 'agent-context-packet.template.md').read_text(encoding='utf-8')
+    for term in [
+        'Default workflow: `worker -> den-code-gate -> Den review -> Den Core den-publish facade -> den-publish /promotion/dry-run`',
+        'Legacy Den Core `publish_reviewed_branch` / `publish_worker_branch` are compatibility only',
+        'Direct `DenPublish.Api` JSON uses camelCase only',
+        'python3 scripts/check-promotion-metadata-drift.py --project $project_id',
+    ]:
+        require(term in context_template, f'missing agent context template term: {term}')
+
+    context_example = (ROOT / 'examples' / 'agent-workflow' / 'den-channels-dry-run-context.example.md').read_text(encoding='utf-8')
+    for term in REQUIRED_AGENT_CONTEXT_TERMS:
+        require(term in context_example, f'missing generated context packet term: {term}')
+    for negative_guidance in [
+        'Do not use `/data/dev`, `/mnt/den-srv/dev`, reviewed-bundle imports, or worker-local checkout paths as the standard promotion route.',
+        'Legacy Den Core `publish_reviewed_branch` / `publish_worker_branch` are compatibility only',
+    ]:
+        require(negative_guidance in context_example, f'missing negative legacy-shim guidance: {negative_guidance}')
+
+    guidance_doc = (ROOT / 'docs' / 'agent-guidance-rollout.md').read_text(encoding='utf-8')
+    for term in [
+        '_global/agent-code-promotion-policy',
+        'publish_reviewed_branch` as legacy/compatibility',
+        'submission=<submission_id> ingress_ref=<ingress_ref> head=<head_commit> base=<base_commit> review_round=<review_round_id or pending> target=<target_branch>',
+        'camelCase',
+    ]:
+        require(term in guidance_doc, f'missing guidance rollout term: {term}')
 
     print('agent_workflow_ux_docs=ok')
 
