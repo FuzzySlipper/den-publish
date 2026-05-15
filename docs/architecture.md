@@ -170,3 +170,16 @@ API/DI behavior:
 
 This slice is endpoint/service wiring only. It does not deploy or restart a service, and it does not add canonical push credentials or perform live publishing.
 
+## Dry-run publisher boundary slice
+
+`DryRunPromotionPublisher` introduces the high-level publish boundary without introducing canonical push credentials or performing a live push. It consumes a `PublishDecision` plus a publishable `PromotionValidationWorkflowResult` and produces a `PromotionPublishResult`.
+
+Publisher behavior:
+
+- Refuses to plan promotion unless validation is publishable, a managed local ref is present, and fetched head equals the decision expected head.
+- Revalidates the managed local ref namespace and target branch safety before planning any Git command shape.
+- For `ValidateOnly=true`, returns a dry-run plan such as `git push canonical refs/den-publish/submissions/<id>:refs/heads/<target>` without invoking Git.
+- For `ValidateOnly=false`, fails closed with `CredentialUnavailable` until a separately approved credential-backed publisher is installed.
+
+This gives orchestrators and future API endpoints a safe command-planning surface for validate-only smoke tests while preserving the credential boundary. Live publishing remains intentionally unavailable in this implementation slice.
+
