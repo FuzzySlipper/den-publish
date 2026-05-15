@@ -1,6 +1,8 @@
+using DenPublish.Api;
 using DenPublish.Core;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddDenPublishValidation(builder.Configuration);
 var app = builder.Build();
 
 app.MapGet("/healthz", () => Results.Ok(new
@@ -21,5 +23,7 @@ app.MapGet("/contracts/ref-example", () => Results.Ok(new
     immutable_ref = SubmissionRefBuilder.BuildImmutableRef("den-channels", 1416, "run-20260514-abc123", 1),
     current_ref = SubmissionRefBuilder.BuildCurrentRef("den-channels", 1416)
 }));
+
+app.MapPromotionValidationEndpoints();
 
 app.Run();

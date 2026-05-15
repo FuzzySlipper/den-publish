@@ -157,3 +157,16 @@ Audit behavior:
 
 This means validate-only workflow results are not considered publishable unless the result was durably recorded. The current file-backed store is suitable for local service smoke/testing; production wiring can replace or wrap it with Den/Core-backed audit persistence without changing the high-level workflow contract.
 
+## Validate-only API endpoint slice
+
+`DenPublish.Api` exposes the first validate-only promotion endpoint at `POST /promotion/validate`. The endpoint maps a JSON request into the Core `PromotionValidationRequest`, invokes the registered `IPromotionValidationWorkflow`, and returns a stable API response containing publishability, validation status, summary, decisions, failures, managed local ref, and fetched head SHA.
+
+API/DI behavior:
+
+- Request parsing rejects malformed Git SHAs, unsupported publish operations, and unsupported submission statuses before invoking the workflow.
+- The endpoint returns `200 OK` for publishable validate-only results and `400 Bad Request` for rejected/failed validation results.
+- `AddDenPublishValidation` wires the Core workflow using process-backed Git primitives, target policy from `DenPublish:TargetPolicy`, and a file-backed audit store at `DenPublish:AuditFilePath`.
+- Target policy defaults fail closed for real canonical promotion unless `DenPublish:TargetPolicy:CanonicalRemoteUrl` is configured.
+
+This slice is endpoint/service wiring only. It does not deploy or restart a service, and it does not add canonical push credentials or perform live publishing.
+

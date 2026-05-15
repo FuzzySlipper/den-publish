@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DenPublish.Core\DenPublish.Core.csproj" />
+    <ProjectReference Include="..\..\src\DenPublish.Api\DenPublish.Api.csproj" />
   </ItemGroup>
 
 </Project>
