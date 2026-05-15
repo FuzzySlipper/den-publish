@@ -85,3 +85,16 @@ The policy boundary is:
 - Target branch names must pass a conservative Git branch safety check before they are used in service-owned argv-based Git commands.
 
 Policy failures are reported as `CanonicalRemoteMismatch`, `InvalidRequest`, or `ScopeViolation` so orchestration can distinguish configuration drift, malformed decisions, and disallowed promotion scope.
+
+## Managed workspace submission fetch slice
+
+`GitSubmissionFetcher` implements the first workspace-mutating Git step, but it still does not contact the canonical remote or use publish credentials. It imports the exact immutable code-gate submission ref into a service-owned workspace and verifies the resulting local object id before later diff/push checks can run.
+
+Fetch behavior:
+
+- The local ref is `refs/den-publish/submissions/{submission_id}`.
+- `submission_id` is validated as a safe ref token before command construction.
+- The fetch command is argv-based: `git -C <workspace> fetch --no-tags <CodeGateRemoteUrl> +<IngressRef>:<local-ref>`.
+- The verifier then runs `git -C <workspace> rev-parse <local-ref>^{commit}`.
+- If fetch or rev-parse fails, the result uses `CodeGateFetchFailed`.
+- If the local object id differs from the Den-reviewed `HeadCommit`, the result uses `CodeGateHeadMismatch`.
