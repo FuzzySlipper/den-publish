@@ -98,3 +98,19 @@ Fetch behavior:
 - The verifier then runs `git -C <workspace> rev-parse <local-ref>^{commit}`.
 - If fetch or rev-parse fails, the result uses `CodeGateFetchFailed`.
 - If the local object id differs from the Den-reviewed `HeadCommit`, the result uses `CodeGateHeadMismatch`.
+
+## Changed-file scope validation slice
+
+`GitChangedFileScopeValidator` performs the next non-credentialed validation step after an exact code-gate submission has been fetched into a managed local ref. It compares the Den-recorded `BaseCommit` to the fetched local submission ref and proves the observed repository changes stay within configured policy before any publish operation can be prepared.
+
+Scope behavior:
+
+- The diff command is argv-based: `git -C <workspace> diff --name-only --diff-filter=ACDMRTUXB <BaseCommit> <local-ref> --`.
+- `local-ref` must stay under `refs/den-publish/submissions/` and pass conservative ref safety checks before Git is invoked.
+- Observed changed paths must be relative repository paths; absolute paths, traversal, and backslashes are rejected.
+- Every observed changed path must match an allowed path prefix from `ChangedFileScopePolicy`.
+- Observed changed paths must exactly match `CodeSubmission.ChangedFilesClaim`; worker claims remain untrusted until this diff validates them.
+- Diff failures use `MissingRequiredValidation`; out-of-scope or mismatched files use `ScopeViolation`.
+
+This slice still performs no canonical remote fetch/push and requires no GitHub publishing credentials.
+
