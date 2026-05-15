@@ -17,6 +17,7 @@ public static class DenPublishValidationServiceCollectionExtensions
         services.AddSingleton<IPromotionPublisher, DryRunPromotionPublisher>();
         services.AddSingleton<ILivePromotionPublisher>(provider => ReadLivePromotionPublisher(configuration, provider.GetRequiredService<IGitCommandRunner>()));
         services.AddSingleton<IWorkspacePathResolver>(_ => ReadWorkspacePathResolver(configuration));
+        services.AddSingleton<IDenPublishRuntimeConfigurationStatusProvider>(_ => new DenPublishRuntimeConfigurationStatusProvider(configuration));
 
         services.AddSingleton<IPromotionAuditStore>(_ => new FilePromotionAuditStore(ReadAuditFilePath(configuration)));
         services.AddSingleton<IPromotionValidationWorkflow>(provider =>

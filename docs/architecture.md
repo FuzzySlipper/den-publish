@@ -237,3 +237,12 @@ Live promotion is now separated from dry-run planning. `/promotion/publish` requ
 When enabled, the Git-backed live publisher uses argv-only `git -C <managed-workspace> push <canonical-remote-url> <managed-local-ref>:refs/heads/<target-branch>`. It revalidates the publish-ready invariants at the publisher boundary: non-validate-only decision, publishable workflow result, safe managed local ref, fetched head matching the decision expected head, safe target branch, managed workspace path, and target remote URL. Failures return structured `PublishFailureCode` values and no shell interpolation is used.
 
 The persistent den-k8plus service remains deployed without `DenPublish__Publishing__Enabled`, so live publish requests fail before workspace resolution, validation, fetch, audit, or publisher invocation.
+
+
+## Runtime configuration status surface
+
+`den-publish` exposes `GET /config/status` as a machine-readable, redacted runtime configuration contract for Den inventory and future operator panels. The endpoint reports the effective configuration keys that control managed workspace storage, audit persistence, canonical remote policy, and live-publishing enablement.
+
+Sensitive or credential-bearing values must not be returned raw. Canonical remote URLs are reported with `value="[redacted]"`, a short fingerprint for drift detection, and a display string with userinfo removed where parsing permits it. Live publishing remains explicit and visible through the `DenPublish:Publishing:Enabled` status.
+
+This endpoint is intentionally local-service telemetry, not a configuration writer. Centralized Den configuration should eventually collect and compare these service-reported contracts rather than relying on scattered shell/env inspection.

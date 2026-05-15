@@ -25,5 +25,6 @@ app.MapGet("/contracts/ref-example", () => Results.Ok(new
 }));
 
 app.MapPromotionValidationEndpoints();
+app.MapDenPublishRuntimeConfigurationStatusEndpoint();
 
 app.Run();

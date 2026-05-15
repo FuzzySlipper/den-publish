@@ -110,3 +110,16 @@ The `/promotion/dry-run` endpoint rejects `decision.validate_only=false` before 
 `/promotion/publish` is present but disabled in the validate-only deployment unless `DenPublish__Publishing__Enabled=true` is set. Do not set that flag in the persistent service until canonical credential placement and live-smoke rollback scope are separately approved.
 
 When live publishing is enabled for a local-only smoke, use disposable bare repositories and a temporary foreground process first. The persistent service should continue to omit `DenPublish__Publishing__Enabled` until the credential gate is approved.
+
+
+### Runtime configuration status
+
+Use the local status endpoint to verify the effective service configuration without reading scattered env files directly:
+
+```bash
+curl -fsS http://127.0.0.1:5090/config/status
+```
+
+The response follows `den-publish-runtime-config-v1` and reports workspace root, audit file path, canonical remote policy, and live-publishing enablement. Canonical remote values are redacted and include only a fingerprint/display form suitable for drift checks. Missing production-required settings produce warnings.
+
+This endpoint is the preferred integration point for a future central Den configuration panel. The panel should query service-owned config status surfaces and compare them against Den-owned desired state, rather than depending on operators remembering every env file path.
