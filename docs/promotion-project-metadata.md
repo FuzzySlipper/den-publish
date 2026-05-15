@@ -167,3 +167,7 @@ Live publish additionally requires:
 ## Handoff to code-gate provisioning (#1436)
 
 Projects with `metadata_incomplete` are not ready for cross-machine development through the standard path. The next required step is code-gate provisioning: create or verify the repo, establish worker submission/reviewer fetch access, configure the service-side read route, and then update this inventory plus `/config/status` policy.
+
+## Code-gate repository provisioning link (#1436)
+
+Repository ownership, creation, and worker/reviewer access preflights are maintained in `docs/code-gate-repo-provisioning.md` and `config/code-gate-repositories.json`. Run `python3 scripts/check-code-gate-repo.py --project <project_id>` before launching a promotion-aware worker.

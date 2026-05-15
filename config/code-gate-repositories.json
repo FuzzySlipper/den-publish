@@ -1,0 +1,45 @@
+{
+  "schema": "den_code_gate_repository_inventory",
+  "schemaVersion": 1,
+  "forgejo": {
+    "instance": "den-code-gate",
+    "baseUrl": "http://192.168.1.10:3020",
+    "sshHost": "192.168.1.10",
+    "sshPort": 3022,
+    "adminTokenEnv": "DEN_CODE_GATE_ADMIN_TOKEN"
+  },
+  "repositories": [
+    {
+      "projectId": "den-channels",
+      "owner": "den-channels",
+      "repo": "den-channels",
+      "repoPath": "den-channels/den-channels.git",
+      "visibility": "private",
+      "defaultBranch": "main",
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/den-channels/den-channels.git",
+      "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
+      "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
+      "provisioningStatus": "runtime_configured",
+      "accessPolicy": [
+        {
+          "actor": "worker_submitters",
+          "capability": "push",
+          "scope": "code-gate repository only; immutable submissions/* refs; no canonical remote access",
+          "credentialHandling": "agent/operator supplied; never embedded in Den task messages"
+        },
+        {
+          "actor": "reviewers",
+          "capability": "fetch",
+          "scope": "immutable ingress refs for review",
+          "credentialHandling": "read-only code-gate access or service-mediated fetch; never canonical push"
+        },
+        {
+          "actor": "den-publish.service",
+          "capability": "fetch",
+          "scope": "exact immutable ingress refs only",
+          "credentialHandling": "service-side CodeGateGitSshCommand; redacted in /config/status"
+        }
+      ]
+    }
+  ]
+}

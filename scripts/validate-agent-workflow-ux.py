@@ -20,6 +20,8 @@ REQUIRED_DOC_TERMS = [
     '_global/agent-code-promotion-policy',
     'Den Core field-based `den-publish` dry-run facade',
     'scripts/check-promotion-metadata-drift.py --project <project_id>',
+    'scripts/check-code-gate-repo.py --project <project_id>',
+    'docs/code-gate-repo-provisioning.md',
 ]
 
 REQUIRED_AGENT_CONTEXT_TERMS = [
@@ -150,6 +152,27 @@ def main() -> None:
         'Legacy Den Core `publish_reviewed_branch` / `publish_worker_branch` are compatibility only',
     ]:
         require(negative_guidance in context_example, f'missing negative legacy-shim guidance: {negative_guidance}')
+
+
+    code_gate_doc = (ROOT / 'docs' / 'code-gate-repo-provisioning.md').read_text(encoding='utf-8')
+    for term in [
+        'Workers may receive code-gate-only submission access',
+        'refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}',
+        'python3 scripts/check-code-gate-repo.py --project den-channels',
+        'DEN_CODE_GATE_ADMIN_TOKEN=<redacted>',
+        'DEN_CODE_GATE_REPO_SSH_COMMAND_DEN_CHANNELS',
+        'Do not paste Forgejo admin tokens, deploy private keys, `GIT_SSH_COMMAND` values, or code-gate private keys into Den task messages or worker prompts.',
+        'Authenticated repo existence/create was intentionally skipped',
+    ]:
+        require(term in code_gate_doc, f'missing code-gate provisioning doc term: {term}')
+
+    code_gate_template = (ROOT / 'templates' / 'agent-workflow' / 'code-gate-repo-provisioning-request.template.md').read_text(encoding='utf-8')
+    for term in [
+        'code-gate-only push access, no canonical push credentials',
+        'DEN_CODE_GATE_ADMIN_TOKEN=<redacted>',
+        'Do not paste `DEN_CODE_GATE_ADMIN_TOKEN`, private keys, or full `GIT_SSH_COMMAND` values',
+    ]:
+        require(term in code_gate_template, f'missing code-gate provisioning template term: {term}')
 
     guidance_doc = (ROOT / 'docs' / 'agent-guidance-rollout.md').read_text(encoding='utf-8')
     for term in [

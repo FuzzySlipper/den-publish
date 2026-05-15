@@ -10,6 +10,7 @@ Source-of-truth documents:
 - Review loop policy: `_global/agent-review-loop-policy`
 - Code promotion policy: `_global/agent-code-promotion-policy`
 - Project metadata inventory: `den-publish/promotion-project-metadata-1433`
+- Code-gate provisioning path: `docs/code-gate-repo-provisioning.md`
 
 ## Safety boundary
 
@@ -26,13 +27,14 @@ Before selecting a real project task for #1427 or later E2E smoke, confirm:
 
 1. The project has a canonical remote URL accepted by `den-publish` target policy.
 2. The project has secret-free promotion metadata in `config/promotion-projects.json`; run `python3 scripts/check-promotion-metadata-drift.py --project <project_id>` before dry-run if readiness is uncertain.
-3. `den-code-gate` has or can create a repository for the project.
-4. The coder can report a complete `den_code_submission` packet with exact `base_commit`, `head_commit`, immutable `ingress_ref`, tests, and changed-file claim.
-5. The reviewer context packet names the same `submission_id`, `ingress_ref`, `head_commit`, and `base_commit`.
-6. The Den review round records or references the exact reviewed `head_commit`.
-7. The orchestrator decision packet names the exact reviewed `head_commit`, `review_round_id`, and structured `scope_overrides[]` when any blocking finding is intentionally covered.
-8. `/promotion/dry-run` succeeds before `/promotion/publish` is considered.
-9. Live `/promotion/publish` is enabled only for the scoped smoke window and disabled afterward.
+3. The project has code-gate repository metadata in `config/code-gate-repositories.json`; run `python3 scripts/check-code-gate-repo.py --project <project_id>` before launching a worker.
+4. `den-code-gate` has or can create a repository for the project using `docs/code-gate-repo-provisioning.md`.
+5. The coder can report a complete `den_code_submission` packet with exact `base_commit`, `head_commit`, immutable `ingress_ref`, tests, and changed-file claim.
+6. The reviewer context packet names the same `submission_id`, `ingress_ref`, `head_commit`, and `base_commit`.
+7. The Den review round records or references the exact reviewed `head_commit`.
+8. The orchestrator decision packet names the exact reviewed `head_commit`, `review_round_id`, and structured `scope_overrides[]` when any blocking finding is intentionally covered.
+9. `/promotion/dry-run` succeeds before `/promotion/publish` is considered.
+10. Live `/promotion/publish` is enabled only for the scoped smoke window and disabled afterward.
 
 ## Coder completion packet
 
