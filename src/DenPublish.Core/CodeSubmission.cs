@@ -1,24 +1,60 @@
 namespace DenPublish.Core;
 
+public enum CodeSubmissionStatus
+{
+    Submitted,
+    ReviewRequested,
+    ChangesRequested,
+    Superseded,
+    Approved,
+    PublishRequested,
+    Published,
+    Rejected,
+    Failed
+}
+
+public enum PublishOperation
+{
+    PushBranch,
+    FastForwardMain
+}
+
 public sealed record CodeSubmission(
     string SubmissionId,
     string ProjectId,
     int TaskId,
     string WorkerRunId,
+    string SubmittedBy,
+    string Role,
     int AttemptOrdinal,
+    string? ParentSubmissionId,
+    string CodeGateInstance,
     string CodeGateRepo,
+    string CodeGateRemoteUrl,
     string IngressRef,
+    string ConvenienceRef,
+    string BaseBranch,
     GitSha BaseCommit,
     GitSha HeadCommit,
-    string BaseBranch,
-    string TargetBranch);
+    string CanonicalRemoteUrl,
+    string TargetBranch,
+    IReadOnlyList<string> ChangedFilesClaim,
+    IReadOnlyList<string> TestsRun,
+    CodeSubmissionStatus Status,
+    DateTimeOffset CreatedAt);
 
 public sealed record PublishDecision(
     string DecisionId,
+    string ProjectId,
+    int TaskId,
     string SubmissionId,
     string RequestedBy,
-    string Operation,
+    PublishOperation Operation,
+    string TargetRemote,
     string TargetBranch,
     GitSha ExpectedHeadCommit,
+    string ExpectedBaseBranch,
     int ReviewRoundId,
-    bool ValidateOnly);
+    IReadOnlyList<string> ScopeOverrideIds,
+    bool ValidateOnly,
+    DateTimeOffset CreatedAt);

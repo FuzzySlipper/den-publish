@@ -12,3 +12,50 @@ Initial service boundaries:
 - `den-publish` owns final Git validation/fetch/push mechanics and credentials.
 
 The first scaffold intentionally contains only health endpoints and core contract primitives. Promotion engine work belongs to task #1424 after code-gate and Den submission contracts are in place.
+
+## Den submission contract
+
+A `CodeSubmission` is the Den-side source-of-truth record for one immutable worker code submission. It is intentionally richer than a Git ref so that orchestrators and reviewers can make publish decisions without raw Git credentials or shell access.
+
+Required fields captured in `DenPublish.Core`:
+
+- `SubmissionId`, `ProjectId`, `TaskId`, `WorkerRunId`, `SubmittedBy`, `Role`, and `AttemptOrdinal` identify the Den actor/run that produced the candidate work.
+- `ParentSubmissionId` links retry/fix submissions back to the prior candidate when applicable.
+- `CodeGateInstance`, `CodeGateRepo`, `CodeGateRemoteUrl`, `IngressRef`, and `ConvenienceRef` identify where the candidate objects live in Forgejo/code-gate.
+- `BaseBranch`, `BaseCommit`, `HeadCommit`, `CanonicalRemoteUrl`, and `TargetBranch` bind the candidate to an exact reviewed SHA and intended canonical destination.
+- `ChangedFilesClaim` and `TestsRun` preserve worker-provided review evidence for validation/audit; they are claims, not trusted proof by themselves.
+- `Status` tracks the workflow state (`Submitted`, `ReviewRequested`, `ChangesRequested`, `Superseded`, `Approved`, `PublishRequested`, `Published`, `Rejected`, `Failed`).
+- `CreatedAt` records when Den accepted the submission.
+
+The publish service must treat `HeadCommit` as immutable and fail closed if a publish request names a different commit from the approved submission/review round.
+
+## Publish decision contract
+
+A `PublishDecision` is the orchestrator/operator decision that authorizes `den-publish` to validate and, when not in dry-run mode, promote a specific submission.
+
+Required fields captured in `DenPublish.Core`:
+
+- `DecisionId`, `ProjectId`, `TaskId`, and `SubmissionId` bind the decision to a Den task and submission.
+- `RequestedBy` identifies the orchestrator/operator creating the decision.
+- `Operation` records the requested promotion shape (`PushBranch` or `FastForwardMain`).
+- `TargetRemote`, `TargetBranch`, `ExpectedHeadCommit`, and `ExpectedBaseBranch` define exactly what may be updated.
+- `ReviewRoundId` links the decision to the Den review round that approved the exact head.
+- `ScopeOverrideIds` names explicit Den override records when the normal changed-file/scope policy is intentionally bypassed.
+- `ValidateOnly` lets orchestrators ask `den-publish` to perform all checks without pushing.
+- `CreatedAt` records when Den accepted the decision.
+
+The promotion engine in task #1424 accepts only Den-provided submission/decision records and returns structured validation failures using the existing `PublishValidationResult` taxonomy.
+
+## Initial promotion validation engine
+
+`IPublishEngine.Validate(PublishDecision decision, CodeSubmission? submission)` is the initial pure validation boundary. It deliberately performs no Git fetch, no Git push, and no credential lookup. Those mechanics can be layered behind later infrastructure-specific adapters after the Den contract is already proven.
+
+The current validator fails closed when:
+
+- the decision references no available submission (`MissingSubmission`);
+- the decision's project/task/submission identity does not match the supplied submission (`InvalidRequest`);
+- the submission is superseded (`StaleSubmission`);
+- the submission has not reached `Approved` or `PublishRequested` (`ReviewNotApproved`);
+- the decision's expected head SHA does not match the submission's immutable head SHA (`CodeGateHeadMismatch`).
+
+A matching `Approved` submission with a validate-only decision is accepted and reported as publishable, but the validate-only flag is recorded as a decision note so callers know no push should be attempted by higher layers.
