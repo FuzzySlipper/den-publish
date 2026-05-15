@@ -114,3 +114,17 @@ Scope behavior:
 
 This slice still performs no canonical remote fetch/push and requires no GitHub publishing credentials.
 
+## Submission ancestry validation slice
+
+`GitSubmissionAncestryValidator` verifies that a fetched submission head is a fast-forward descendant of the Den-recorded `BaseCommit` before publish preparation continues. This prevents promotion of a candidate whose reviewed head is unrelated to, or rewound behind, the base that Den and reviewers approved.
+
+Ancestry behavior:
+
+- The check is argv-based: `git -C <workspace> merge-base --is-ancestor <BaseCommit> <local-ref>`.
+- `local-ref` must stay under `refs/den-publish/submissions/` and pass conservative ref safety checks before Git is invoked.
+- Exit code `0` accepts the ancestry relationship.
+- Exit code `1` rejects with `NonFastForward`.
+- Other Git failures use `MissingRequiredValidation` so orchestration fails closed rather than treating an unreadable workspace as publishable.
+
+This slice still performs no canonical remote update. Later fast-forward-to-target checks can layer a target branch/ref fetch on top of the same `merge-base --is-ancestor` primitive.
+
