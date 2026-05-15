@@ -28,7 +28,7 @@ This checklist prepares a real project task for the first full coder -> reviewer
 3. Orchestrator creates `den_publish_decision` packet with `validateOnly=true`.
 4. Submit the combined decision/submission envelope to `/promotion/dry-run`.
 5. Preserve response, audit line count, fetched head, and managed workspace path evidence.
-6. Only after dry-run success, decide whether to open a separate live publish approval gate.
+6. Only after dry-run success, decide whether to open a separate live publish approval gate using `docs/live-publish-rehearsal-checklist.md` and `templates/agent-workflow/live-publish-approval-request.template.md`.
 
 ## Live publish gate
 

@@ -2,6 +2,8 @@
 
 This runbook is the final approval artifact for enabling `/promotion/publish` against a canonical GitHub remote. It is intentionally written so operators can review the exact semantic plan before any credential file is created, any service environment is changed, or any canonical branch is pushed.
 
+For the reusable project-to-project rehearsal path, use [`docs/live-publish-rehearsal-checklist.md`](live-publish-rehearsal-checklist.md). For the required human approval packet, use [`templates/agent-workflow/live-publish-approval-request.template.md`](../templates/agent-workflow/live-publish-approval-request.template.md).
+
 ## Current safe state
 
 The deployed service is expected to remain in this state until the final gate is approved:
@@ -26,7 +28,7 @@ curl -fsS http://127.0.0.1:5090/config/status
 
 ## Approval required
 
-Do not execute this runbook from a worker sandbox or delegated project context. A sysadmin/operator must explicitly approve all of the following before execution:
+Do not execute this runbook from a worker sandbox or delegated project context. Den Core and worker sandboxes must not receive canonical push credentials. A sysadmin/operator must explicitly approve all of the following before execution:
 
 1. credential owner and storage location;
 2. canonical repository allowed for the smoke;
@@ -52,10 +54,10 @@ Recommended files, created only after approval:
 └── known_hosts               # GitHub host key material, 0644 or 0600, agent:agents
 ```
 
-Recommended SSH command shape, stored only in the service environment file and never printed in full in Den messages:
+Recommended SSH command shape, stored only in the service environment file and never printed in full in Den messages. Include `ssh -F /dev/null` so ambient SSH config cannot alter the service credential path:
 
 ```bash
-ssh -i /home/agents/runtime/den-publish/ssh/den-publish-github   -o IdentitiesOnly=yes   -o BatchMode=yes   -o UserKnownHostsFile=/home/agents/runtime/den-publish/ssh/known_hosts   -o StrictHostKeyChecking=yes
+ssh -F /dev/null -i /home/agents/runtime/den-publish/ssh/den-publish-github   -o IdentitiesOnly=yes   -o BatchMode=yes   -o UserKnownHostsFile=/home/agents/runtime/den-publish/ssh/known_hosts   -o StrictHostKeyChecking=yes
 ```
 
 The service passes this command only to the child `git push` environment as `GIT_SSH_COMMAND` and also sets `GIT_TERMINAL_PROMPT=0`. `/config/status` reports only `display=ssh_command` plus a fingerprint.
@@ -80,7 +82,7 @@ Required result:
 
 ## Enable live publishing after credential placement
 
-After credential files are placed and the public key is authorized on the canonical repository, update the service environment atomically with a timestamped backup. The environment must include the existing validate-only settings plus:
+After credential files are placed and the public key is authorized on the canonical repository, update the service environment atomically with a timestamped backup. The environment must include the existing validate-only settings plus only this live delta:
 
 ```bash
 DenPublish__Publishing__Enabled=true
@@ -146,7 +148,7 @@ If live publishing should not remain enabled after the smoke, remove `DenPublish
 
 ## Documentation packet
 
-After the smoke, post a Den task update with:
+Before executing the smoke, record the filled approval request from `templates/agent-workflow/live-publish-approval-request.template.md`. After the smoke, post a Den task update with:
 
 - commit/service version;
 - canonical repo and branch name;

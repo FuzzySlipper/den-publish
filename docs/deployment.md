@@ -169,4 +169,4 @@ The service persists used overrides to the audit JSONL record. This makes except
 
 ## Final live publish approval runbook
 
-The concrete approval/execution checklist for credential placement and canonical smoke is maintained in [`docs/live-publish-runbook.md`](live-publish-runbook.md). Do not enable live publishing or place canonical push credentials without approval of that semantic plan.
+The concrete approval/execution checklist for credential placement and canonical smoke is maintained in [`docs/live-publish-runbook.md`](live-publish-runbook.md). The reusable project-to-project rehearsal path is [`docs/live-publish-rehearsal-checklist.md`](live-publish-rehearsal-checklist.md), with approval template [`templates/agent-workflow/live-publish-approval-request.template.md`](../templates/agent-workflow/live-publish-approval-request.template.md). Do not enable live publishing or place canonical push credentials without approval of that semantic plan.
