@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DenPublish.Api/DenPublish.Api.csproj" />
+    <Project Path="src/DenPublish.Core/DenPublish.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DenPublish.Core.Tests/DenPublish.Core.Tests.csproj" />
+  </Folder>
+</Solution>

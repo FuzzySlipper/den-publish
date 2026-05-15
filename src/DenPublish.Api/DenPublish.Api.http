@@ -1,0 +1,6 @@
+@DenPublish.Api_HostAddress = http://localhost:5157
+
+GET {{DenPublish.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
