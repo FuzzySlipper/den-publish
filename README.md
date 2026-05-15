@@ -38,3 +38,7 @@ When `WorkspaceRoot` is set, request `WorkspacePath` values are ignored and the 
 
 Do not add canonical push credentials or enable persistent service deployment until validate-only smoke and deployment approval have completed.
 
+
+## Agent workflow UX
+
+For real repo/task rehearsals, use `docs/agent-workflow-ux.md` plus the packet templates under `templates/agent-workflow/`. These artifacts keep coder, reviewer, and orchestrator agents synchronized on exact code-gate refs and reviewed SHAs without requiring orchestrators to type promotion Git commands.

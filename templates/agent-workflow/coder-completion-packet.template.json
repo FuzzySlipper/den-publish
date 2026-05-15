@@ -1,0 +1,30 @@
+{
+  "schema": "den_code_submission",
+  "schema_version": 1,
+  "submission_id": "sub_<task_id>_<attempt_ordinal>",
+  "project_id": "<den_project_id>",
+  "task_id": 0,
+  "worker_run_id": "run-<yyyyMMddHHmmss>-<shortid>",
+  "submitted_by": "<agent_identity>",
+  "role": "coder",
+  "attempt_ordinal": 1,
+  "parent_submission_id": null,
+  "code_gate_instance": "den-code-gate",
+  "code_gate_repo": "<project_repo>.git",
+  "code_gate_remote_url": "ssh://git@192.168.1.10:3022/<owner_or_project>/<project_repo>.git",
+  "ingress_ref": "refs/heads/submissions/<den_project_id>/tasks/<task_id>/runs/<worker_run_id>/attempt-001",
+  "convenience_ref": "refs/heads/submissions/<den_project_id>/tasks/<task_id>/current",
+  "base_branch": "main",
+  "base_commit": "<40-char-base-sha>",
+  "head_commit": "<40-char-head-sha>",
+  "canonical_remote_url": "git@github.com:FuzzySlipper/<canonical_repo>.git",
+  "target_branch": "task/<task_id>-<short-slug>",
+  "changed_files_claim": [
+    "<relative/path.ext>"
+  ],
+  "tests_run": [
+    "<command>: <result>"
+  ],
+  "status": "submitted",
+  "created_at": "<iso8601-utc>"
+}
