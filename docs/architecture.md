@@ -59,3 +59,16 @@ The current validator fails closed when:
 - the decision's expected head SHA does not match the submission's immutable head SHA (`CodeGateHeadMismatch`).
 
 A matching `Approved` submission with a validate-only decision is accepted and reported as publishable, but the validate-only flag is recorded as a decision note so callers know no push should be attempted by higher layers.
+
+## Code-gate ref verification slice
+
+The next #1424 slice layers `CodeGatePublishValidationEngine` over the pure Den contract validator. It still performs no push and does not require canonical GitHub credentials. Its additional responsibility is to resolve the immutable code-gate `IngressRef` and prove that the remote ref still points at the exact reviewed `HeadCommit` before any later promotion step can run.
+
+The Git-facing boundary is intentionally narrow:
+
+- `ICodeGateRefResolver` resolves a `CodeSubmission` to a `CodeGateRefResolution`.
+- `GitLsRemoteCodeGateRefResolver` uses `git ls-remote --exit-code <CodeGateRemoteUrl> <IngressRef>` so it checks the immutable submission ref, not the mutable `ConvenienceRef`.
+- `CodeGatePublishValidationEngine` fails with `CodeGateFetchFailed` if the code-gate ref cannot be resolved.
+- `CodeGatePublishValidationEngine` rejects with `CodeGateHeadMismatch` if the resolved remote head differs from either the Den submission head or the publish decision's expected head.
+
+Later slices can add workspace object fetch, scope diff validation, fast-forward checks, audit persistence, and the final credential-backed push path behind the same fail-closed high-level boundary.
