@@ -225,14 +225,14 @@ This removes the last known per-project/per-submission filesystem shim from vali
 
 ## Dry-run endpoint live-decision guard
 
-`/promotion/dry-run` is a validate-only endpoint. It now rejects requests where `decision.validate_only` is `false` before resolving a workspace, calling the validation workflow, fetching code-gate refs, appending audit records, or invoking a publisher. This preserves the endpoint contract if a future credential-backed publisher is registered: dry-run requests cannot accidentally become live pushes.
+`/promotion/dry-run` is a validate-only endpoint. It now rejects requests where `decision.validateOnly` is `false` before resolving a workspace, calling the validation workflow, fetching code-gate refs, appending audit records, or invoking a publisher. This preserves the endpoint contract if a future credential-backed publisher is registered: dry-run requests cannot accidentally become live pushes.
 
 Live promotion must use a separate explicit endpoint (for example `/promotion/publish`) with its own credential, policy, audit, and rollback gate.
 
 
 ## Explicit live publish endpoint slice
 
-Live promotion is now separated from dry-run planning. `/promotion/publish` requires `decision.validate_only=false`; `/promotion/dry-run` requires `decision.validate_only=true`. The service registers a disabled live publisher by default unless `DenPublish__Publishing__Enabled=true` is explicitly configured.
+Live promotion is now separated from dry-run planning. `/promotion/publish` requires `decision.validateOnly=false`; `/promotion/dry-run` requires `decision.validateOnly=true`. The service registers a disabled live publisher by default unless `DenPublish__Publishing__Enabled=true` is explicitly configured.
 
 When enabled, the Git-backed live publisher uses argv-only `git -C <managed-workspace> push <canonical-remote-url> <managed-local-ref>:refs/heads/<target-branch>`. It revalidates the publish-ready invariants at the publisher boundary: non-validate-only decision, publishable workflow result, safe managed local ref, fetched head matching the decision expected head, safe target branch, managed workspace path, and target remote URL. Failures return structured `PublishFailureCode` values and no shell interpolation is used.
 
@@ -252,7 +252,7 @@ This endpoint is intentionally local-service telemetry, not a configuration writ
 
 Promotion validation now requires explicit Den review state on each submission. A submission being marked `approved` or `publish_requested` is necessary but not sufficient: the submission must also carry the review round referenced by the publish decision, the review verdict must be `looks_good`, and blocking review findings must either be resolved or covered by a decision-scoped override id.
 
-This keeps the trusted publisher from promoting work based only on stale status labels. Override ids are decision-local audit inputs: an unresolved blocking finding with an override id is publishable only when that same override id appears in `decision.scope_override_ids`; otherwise validation fails closed with `unresolved_blocking_findings`.
+This keeps the trusted publisher from promoting work based only on stale status labels. Override ids are decision-local audit inputs: an unresolved blocking finding with an override id is publishable only when that same override id appears in `decision.scopeOverrideIds`; otherwise validation fails closed with `unresolved_blocking_findings`.
 
 
 ## Explicit credential policy for live publish
@@ -268,7 +268,7 @@ This keeps future credential placement deliberate and prevents accidental use of
 
 Scope overrides are now structured publish-decision data, not bare ids. A decision can only cover an unresolved blocking review finding when both conditions hold:
 
-- the finding declares an override id and that id appears in `decision.scope_override_ids`;
-- the decision also includes a matching structured `scope_overrides[]` entry with non-empty `reason` and `approved_by`.
+- the finding declares an override id and that id appears in `decision.scopeOverrideIds`;
+- the decision also includes a matching structured `scopeOverrides[]` entry with non-empty `reason` and `approvedBy`.
 
 Validation records a human-readable decision trace containing the override reason. Audit JSONL records the used overrides as `scope_overrides[]` entries with `override_id`, `finding_id`, `reason`, and `approved_by`, so replay and later operator review can explain why the blocker was allowed through. Bare override ids without reasons fail closed as unresolved blocking findings.

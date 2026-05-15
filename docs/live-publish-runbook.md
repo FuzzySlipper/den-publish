@@ -113,7 +113,7 @@ Use a reviewed Den submission payload with all normal validation gates populated
 - no unresolved blocking findings, or structured override reason/approver if explicitly approved;
 - allowed path prefixes for the smoke;
 - target branch scoped to the task, for example `task/1424-live-publish-smoke`;
-- `decision.validate_only=false`;
+- `decision.validateOnly=false`;
 - endpoint: `POST http://127.0.0.1:5090/promotion/publish`.
 
 Success criteria:

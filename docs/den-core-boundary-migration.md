@@ -64,12 +64,12 @@ Current `den-publish` implementation lives in `/home/dev/den-publish`:
 | Area | Required behavior |
 |---|---|
 | Managed workspace | Derive `<WorkspaceRoot>/<ProjectId>/tasks/<TaskId>/submissions/<SubmissionId>` and ignore caller-provided paths when `WorkspaceRoot` is configured. |
-| Code-gate source | Fetch only the declared immutable `submission.ingress_ref` and require fetched SHA to equal `submission.head_commit` / decision `expected_head_commit`. |
+| Code-gate source | Fetch only the declared immutable `submission.ingressRef` and require fetched SHA to equal `submission.headCommit` / decision `expectedHeadCommit`. |
 | Target policy | Enforce canonical remote URL, logical target remote name, allowed push branch prefixes, and allowed fast-forward branches. |
 | Scope validation | Diff changed files against allowed policy and structured overrides. |
 | Ancestry validation | Confirm fetched submission is consistent with the declared base/canonical target before promotion. |
 | Dry-run | Run all validation and simulated publish without credentials or canonical push. |
-| Live push | Require `/promotion/publish`, `decision.validate_only=false`, enabled service config, and explicit credential policy. Use only child-process environment (`GIT_SSH_COMMAND`, `GIT_TERMINAL_PROMPT=0`). |
+| Live push | Require `/promotion/publish`, `decision.validateOnly=false`, enabled service config, and explicit credential policy. Use only child-process environment (`GIT_SSH_COMMAND`, `GIT_TERMINAL_PROMPT=0`). |
 | Fail-closed diagnostics | Return structured failures for missing submission, review mismatch, code-gate fetch mismatch, target policy mismatch, credential unavailable, and Git push failures. |
 | Service audit | Append JSONL audit records for validation and publish attempts without leaking secrets. |
 
@@ -138,7 +138,7 @@ Run a real low-risk task through the new packet flow:
 2. push candidate to `den-code-gate` immutable submission ref;
 3. post coder submission packet in Den;
 4. reviewer fetches exact code-gate ref and records verdict/head;
-5. orchestrator builds decision packet with `validate_only=true`;
+5. orchestrator builds decision API payload with `validateOnly=true`;
 6. call `POST /promotion/dry-run`;
 7. document exact repo/ref/SHA/audit result.
 
@@ -178,39 +178,61 @@ For the first real repo/task test:
 
 - Prefer a new low-risk task rather than unblocking old `den-channels` tasks #1411/#1412.
 - If using `den-channels`, create a fresh task specifically for the code-gate flow and link the old tasks as historical blockers/superseded context.
-- Require `validate_only=true` and `/promotion/dry-run` for the first pass.
+- Require `validateOnly=true` and `/promotion/dry-run` for the first pass.
 - Do not use worker-local paths, `/data/dev` shims, or reviewed bundle paths unless explicitly testing legacy compatibility.
 - Keep live publishing disabled before and after the dry run.
 
-Minimum decision packet fields:
+Minimum `/promotion/dry-run` API payload fields (camelCase for `DenPublish.Api` binding):
 
 ```json
 {
+  "workspacePath": "ignored-when-workspace-root-is-configured",
+  "allowedPathPrefixes": ["<relative/path/prefix/>"],
   "decision": {
-    "project_id": "<project>",
-    "task_id": 1427,
-    "submission_id": "<submission-id>",
-    "requested_by": "sysadmin",
+    "decisionId": "pub_1427_<submission-id>",
+    "projectId": "<project>",
+    "taskId": 1427,
+    "submissionId": "<submission-id>",
+    "requestedBy": "sysadmin",
     "operation": "push_branch",
-    "target_remote": "canonical",
-    "target_branch": "task/1427-<slug>",
-    "expected_head_commit": "<40-char-sha>",
-    "expected_base_branch": "main",
-    "review_round_id": 0,
-    "scope_override_ids": [],
-    "scope_overrides": [],
-    "validate_only": true,
-    "created_at": "<iso8601>"
+    "targetRemote": "canonical",
+    "targetBranch": "task/1427-<slug>",
+    "expectedHeadCommit": "<40-char-sha>",
+    "expectedBaseBranch": "main",
+    "reviewRoundId": 0,
+    "scopeOverrideIds": [],
+    "scopeOverrides": [],
+    "validateOnly": true,
+    "createdAt": "<iso8601>"
   },
   "submission": {
-    "submission_id": "<submission-id>",
-    "project_id": "<project>",
-    "task_id": 1427,
-    "ingress_ref": "refs/heads/submissions/<project>/tasks/1427/runs/<run-id>/attempt-001",
-    "base_commit": "<40-char-sha>",
-    "head_commit": "<40-char-sha>",
-    "canonical_remote_url": "git@github.com:FuzzySlipper/<repo>.git",
-    "status": "approved"
+    "submissionId": "<submission-id>",
+    "projectId": "<project>",
+    "taskId": 1427,
+    "workerRunId": "<run-id>",
+    "submittedBy": "<agent>",
+    "role": "coder",
+    "attemptOrdinal": 1,
+    "parentSubmissionId": null,
+    "codeGateInstance": "den-code-gate",
+    "codeGateRepo": "<repo>.git",
+    "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/<owner>/<repo>.git",
+    "ingressRef": "refs/heads/submissions/<project>/tasks/1427/runs/<run-id>/attempt-001",
+    "convenienceRef": "refs/heads/submissions/<project>/tasks/1427/current",
+    "baseBranch": "main",
+    "baseCommit": "<40-char-sha>",
+    "headCommit": "<40-char-sha>",
+    "canonicalRemoteUrl": "git@github.com:FuzzySlipper/<repo>.git",
+    "targetBranch": "task/1427-<slug>",
+    "changedFilesClaim": ["<relative/path.ext>"],
+    "testsRun": ["<command>: <result>"],
+    "status": "approved",
+    "createdAt": "<iso8601>",
+    "review": {
+      "reviewRoundId": 0,
+      "verdict": "looks_good",
+      "findings": []
+    }
   }
 }
 ```

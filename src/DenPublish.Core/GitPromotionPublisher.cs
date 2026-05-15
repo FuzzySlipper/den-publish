@@ -86,7 +86,7 @@ public sealed class GitPromotionPublisher(IGitCommandRunner git, GitPromotionCre
         {
             return PromotionPublishResult.Rejected(
                 "live publisher requires a non-validate-only decision",
-                new ValidationFailure(PublishFailureCode.InvalidRequest, "Live publishing requires decision.validate_only=false."));
+                new ValidationFailure(PublishFailureCode.InvalidRequest, "Live publishing requires decision.validateOnly=false."));
         }
 
         if (!request.Validation.IsPublishable)

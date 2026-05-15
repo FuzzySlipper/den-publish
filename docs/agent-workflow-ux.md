@@ -75,16 +75,16 @@ Template: `templates/agent-workflow/rework-rereview-packet.template.md`
 
 Template: `templates/agent-workflow/orchestrator-publish-decision.template.json`
 
-The orchestrator decision must bind exactly:
+The orchestrator decision template is the live `DenPublish.Api` request payload, so it must use camelCase JSON keys even when it was assembled from Den/human packets that use snake_case. It must bind exactly:
 
-- `submission_id`
-- `expected_head_commit`
-- `review_round_id`
-- `target_branch`
-- `scope_override_ids[]`
-- `scope_overrides[]` entries with `override_id`, `reason`, and `approved_by`
+- `submissionId`
+- `expectedHeadCommit`
+- `reviewRoundId`
+- `targetBranch`
+- `scopeOverrideIds[]`
+- `scopeOverrides[]` entries with `overrideId`, `reason`, and `approvedBy`
 
-For prep and first real repo/task tests, set `validate_only: true` and call `/promotion/dry-run`. Only use `validate_only: false` with `/promotion/publish` after an explicit live-gate approval.
+For prep and first real repo/task tests, set `validateOnly: true` and call `/promotion/dry-run`. Only use `validateOnly: false` with `/promotion/publish` after an explicit live-gate approval.
 
 ## Human-readable synchronization line
 

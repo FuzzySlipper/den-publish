@@ -77,7 +77,7 @@ public sealed class PromotionDryRunEndpointTests
         Assert.Equal("rejected", response.PublishStatus);
         Assert.Equal("promotion validation request is malformed", response.PublishSummary);
         Assert.Equal("invalid_request", Assert.Single(response.PublishFailures).Code);
-        Assert.Contains("/promotion/dry-run requires decision.validate_only=true", response.PublishFailures[0].Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("/promotion/dry-run requires decision.validateOnly=true", response.PublishFailures[0].Message, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(response.PlannedCommands);
         Assert.False(response.Validation.IsPublishable);
         Assert.Null(workflow.CapturedRequest);
@@ -122,7 +122,7 @@ public sealed class PromotionDryRunEndpointTests
         Assert.False(response.Succeeded);
         Assert.Equal("rejected", response.PublishStatus);
         Assert.Equal("invalid_request", Assert.Single(response.PublishFailures).Code);
-        Assert.Contains("/promotion/publish requires decision.validate_only=false", response.PublishFailures[0].Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("/promotion/publish requires decision.validateOnly=false", response.PublishFailures[0].Message, StringComparison.OrdinalIgnoreCase);
         Assert.Null(workflow.CapturedRequest);
         Assert.Null(publisher.CapturedRequest);
     }

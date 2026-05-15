@@ -102,7 +102,7 @@ Leave runtime/audit/workspace data intact unless cleanup is explicitly approved.
 
 Canonical push credentials and live canonical pushes require separate explicit approval. Before that gate, the service should only be used for validate-only and dry-run planning.
 
-The `/promotion/dry-run` endpoint rejects `decision.validate_only=false` before validation/fetch/audit/publisher execution. A future live-publish rollout must use a separate explicit publish endpoint and must not reuse the dry-run endpoint for credential-backed pushes.
+The `/promotion/dry-run` endpoint rejects `decision.validateOnly=false` before validation/fetch/audit/publisher execution. A future live-publish rollout must use a separate explicit publish endpoint and must not reuse the dry-run endpoint for credential-backed pushes.
 
 
 ### Live publish endpoint gate
@@ -127,7 +127,7 @@ This endpoint is the preferred integration point for a future central Den config
 
 ### Publish request review state
 
-Production publish and dry-run requests must include Den review state in the submission payload. The publisher validates that `submission.review.review_round_id` matches `decision.review_round_id`, the verdict is `looks_good`, and any unresolved blocking findings are either resolved or covered by explicit `decision.scope_override_ids`.
+Production publish and dry-run requests must include Den review state in the submission payload. The publisher validates that `submission.review.reviewRoundId` matches `decision.reviewRoundId`, the verdict is `looks_good`, and any unresolved blocking findings are either resolved or covered by explicit `decision.scopeOverrideIds`.
 
 Treat missing review state as a deployment/request bug. The service fails closed with `missing_review`; do not bypass this by loosening submission status alone.
 
@@ -147,11 +147,11 @@ Credential file placement and canonical live smoke still require a separate expl
 
 ### Scope override audit requirements
 
-Promotion callers must provide structured override metadata when using scope overrides. Supplying only `scope_override_ids` is not enough for an unresolved blocking finding. Include matching `scope_overrides[]` entries with:
+Promotion callers must provide structured override metadata when using scope overrides. Supplying only `scopeOverrideIds` is not enough for an unresolved blocking finding. Include matching `scopeOverrides[]` entries with:
 
-- `override_id`
+- `overrideId`
 - `reason`
-- `approved_by`
+- `approvedBy`
 
 The service persists used overrides to the audit JSONL record. This makes exceptional publish decisions explainable during central Den inventory/review and avoids undocumented bypasses.
 

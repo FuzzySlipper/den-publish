@@ -72,7 +72,7 @@ public static class PromotionValidationEndpoints
         {
             var liveDecisionFailure = new ValidationFailure(
                 PublishFailureCode.InvalidRequest,
-                "/promotion/dry-run requires decision.validate_only=true; use /promotion/publish for approved live promotions.");
+                "/promotion/dry-run requires decision.validateOnly=true; use /promotion/publish for approved live promotions.");
             return PromotionDryRunApiResponse.FromValidationOnly(MalformedRequestResult(liveDecisionFailure));
         }
 
@@ -123,7 +123,7 @@ public static class PromotionValidationEndpoints
         {
             var validateOnlyFailure = new ValidationFailure(
                 PublishFailureCode.InvalidRequest,
-                "/promotion/publish requires decision.validate_only=false; use /promotion/dry-run for validate-only planning.");
+                "/promotion/publish requires decision.validateOnly=false; use /promotion/dry-run for validate-only planning.");
             return PromotionDryRunApiResponse.FromValidationOnly(MalformedRequestResult(validateOnlyFailure));
         }
 
@@ -194,7 +194,7 @@ public static class PromotionValidationEndpoints
 
         if (!GitSha.TryCreate(request.Decision.ExpectedHeadCommit, out var expectedHead))
         {
-            failure = new ValidationFailure(PublishFailureCode.InvalidRequest, "Decision expected_head_commit must be a full Git SHA.");
+            failure = new ValidationFailure(PublishFailureCode.InvalidRequest, "Decision expectedHeadCommit must be a full Git SHA.");
             return false;
         }
 
@@ -241,13 +241,13 @@ public static class PromotionValidationEndpoints
 
         if (!GitSha.TryCreate(submission.BaseCommit, out var baseCommit))
         {
-            failure = new ValidationFailure(PublishFailureCode.InvalidRequest, "Submission base_commit must be a full Git SHA.");
+            failure = new ValidationFailure(PublishFailureCode.InvalidRequest, "Submission baseCommit must be a full Git SHA.");
             return false;
         }
 
         if (!GitSha.TryCreate(submission.HeadCommit, out var headCommit))
         {
-            failure = new ValidationFailure(PublishFailureCode.InvalidRequest, "Submission head_commit must be a full Git SHA.");
+            failure = new ValidationFailure(PublishFailureCode.InvalidRequest, "Submission headCommit must be a full Git SHA.");
             return false;
         }
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,7 +15,7 @@ REQUIRED_DOC_TERMS = [
     'review_round_id',
     'scope_overrides',
     '/promotion/dry-run',
-    'validate_only',
+    'validateOnly',
     'Orchestrators approve high-level Den decisions',
 ]
 
@@ -30,16 +31,23 @@ REQUIRED_JSON_PATHS = {
         ('tests_run',),
     ],
     'templates/agent-workflow/orchestrator-publish-decision.template.json': [
-        ('decision', 'decision_id'),
-        ('decision', 'submission_id'),
-        ('decision', 'expected_head_commit'),
-        ('decision', 'review_round_id'),
-        ('decision', 'scope_override_ids'),
-        ('decision', 'scope_overrides'),
-        ('decision', 'validate_only'),
+        ('workspacePath',),
+        ('allowedPathPrefixes',),
+        ('decision', 'decisionId'),
+        ('decision', 'submissionId'),
+        ('decision', 'targetBranch'),
+        ('decision', 'expectedHeadCommit'),
+        ('decision', 'reviewRoundId'),
+        ('decision', 'scopeOverrideIds'),
+        ('decision', 'scopeOverrides'),
+        ('decision', 'validateOnly'),
         ('submission', 'review', 'verdict'),
-        ('submission', 'head_commit'),
-        ('submission', 'ingress_ref'),
+        ('submission', 'review', 'reviewRoundId'),
+        ('submission', 'submissionId'),
+        ('submission', 'baseCommit'),
+        ('submission', 'headCommit'),
+        ('submission', 'ingressRef'),
+        ('submission', 'codeGateRemoteUrl'),
     ],
 }
 
@@ -57,6 +65,27 @@ def get_path(obj: object, path: tuple[str, ...]) -> object:
     return cur
 
 
+def find_snake_case_keys(obj: object, prefix: str = '') -> list[str]:
+    findings: list[str] = []
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            dotted = f'{prefix}.{key}' if prefix else key
+            if '_' in key:
+                findings.append(dotted)
+            findings.extend(find_snake_case_keys(value, dotted))
+    elif isinstance(obj, list):
+        for index, value in enumerate(obj):
+            findings.extend(find_snake_case_keys(value, f'{prefix}[{index}]'))
+    return findings
+
+
+def first_json_block_after(text: str, marker: str) -> object:
+    start = text.index(marker)
+    match = re.search(r'```json\n(.*?)\n```', text[start:], re.DOTALL)
+    require(match is not None, f'missing JSON block after {marker!r}')
+    return json.loads(match.group(1))
+
+
 def main() -> None:
     doc = (ROOT / 'docs' / 'agent-workflow-ux.md').read_text(encoding='utf-8')
     for term in REQUIRED_DOC_TERMS:
@@ -66,6 +95,28 @@ def main() -> None:
         data = json.loads((ROOT / rel).read_text(encoding='utf-8'))
         for path in paths:
             get_path(data, path)
+        if rel == 'templates/agent-workflow/orchestrator-publish-decision.template.json':
+            snake_case_keys = find_snake_case_keys(data)
+            require(not snake_case_keys, f'orchestrator API payload contains snake_case keys: {snake_case_keys}')
+            require(get_path(data, ('decision', 'validateOnly')) is True, 'decision.validateOnly must be true for /promotion/dry-run template')
+
+
+    migration_doc = (ROOT / 'docs' / 'den-core-boundary-migration.md').read_text(encoding='utf-8')
+    migration_payload = first_json_block_after(migration_doc, 'Minimum `/promotion/dry-run` API payload fields')
+    migration_snake_case_keys = find_snake_case_keys(migration_payload)
+    require(not migration_snake_case_keys, f'boundary migration API JSON contains snake_case keys: {migration_snake_case_keys}')
+
+    deployment_doc = (ROOT / 'docs' / 'deployment.md').read_text(encoding='utf-8')
+    for term in ['scopeOverrideIds', 'scopeOverrides[]', 'overrideId', 'approvedBy']:
+        require(term in deployment_doc, f'missing camelCase deployment API term: {term}')
+    for term in ['scope_override_ids', 'scope_overrides[]', 'override_id', 'approved_by']:
+        require(term not in deployment_doc, f'deployment API guidance still contains snake_case term: {term}')
+
+    architecture_doc = (ROOT / 'docs' / 'architecture.md').read_text(encoding='utf-8')
+    for term in ['decision.scopeOverrideIds', 'scopeOverrides[]', 'approvedBy']:
+        require(term in architecture_doc, f'missing camelCase architecture API term: {term}')
+    for term in ['decision.scope_override_ids', 'structured `scope_overrides[]` entry', 'non-empty `reason` and `approved_by`']:
+        require(term not in architecture_doc, f'architecture API guidance still contains snake_case term: {term}')
 
     checklist = (ROOT / 'templates' / 'agent-workflow' / 'real-task-test-checklist.md').read_text(encoding='utf-8')
     for term in ['livePublishing.enabled=false', 'ssh -F /dev/null', '/promotion/publish', 'disable live publishing']:
