@@ -141,15 +141,35 @@ def setting_configured(setting: Any) -> bool:
     return isinstance(setting, dict) and bool(setting.get("configured"))
 
 
-def check_runtime_status(repo: dict[str, Any], status_url: str) -> list[Finding]:
+def live_credential_policy_is_explicit_and_redacted(status: dict[str, Any]) -> bool:
+    credential = status.get("liveCredentialPolicy", {})
+    return (
+        credential.get("configured") is True
+        and credential.get("display") == "ssh_command"
+        and credential.get("value") == "[redacted]"
+        and bool(credential.get("fingerprint"))
+    )
+
+
+def check_runtime_status(repo: dict[str, Any], status_url: str, *, allow_live_enabled: bool = False) -> list[Finding]:
     findings: list[Finding] = []
     status_code, status = fetch_json(status_url)
     if status_code != 200 or not isinstance(status, dict):
         return [Finding("error", "status_unreachable", f"failed to fetch den-publish status from {status_url}")]
     if status.get("configurationContract") != "den-publish-runtime-config-v2":
         findings.append(Finding("error", "bad_status_contract", "den-publish status contract is not v2"))
-    if status.get("livePublishing", {}).get("enabled") is True:
-        findings.append(Finding("error", "live_publishing_enabled", "persistent den-publish service reports live publishing enabled"))
+    live_enabled = status.get("livePublishing", {}).get("enabled") is True
+    live_credential_configured = status.get("liveCredentialPolicy", {}).get("configured") is True
+    if allow_live_enabled:
+        if not live_enabled:
+            findings.append(Finding("error", "live_publishing_not_enabled", "approved-live mode requires live publishing enabled"))
+        elif not live_credential_policy_is_explicit_and_redacted(status):
+            findings.append(Finding("error", "live_credentials_not_explicit_redacted", "live publishing is enabled but credential policy is not explicit ssh_command with redacted value and fingerprint"))
+    else:
+        if live_enabled:
+            findings.append(Finding("error", "live_publishing_enabled", "persistent den-publish service reports live publishing enabled"))
+        if live_credential_configured:
+            findings.append(Finding("error", "live_credentials_configured", "persistent den-publish service reports live credential policy configured"))
     policy = status_project(status, str(repo["projectId"]))
     if policy is None:
         return findings + [Finding("error", "runtime_project_missing", "project missing from den-publish /config/status")]
@@ -292,6 +312,7 @@ def main() -> int:
     parser.add_argument("--create", action="store_true", help="Create missing repo using admin token")
     parser.add_argument("--create-owner-org", action="store_true", help="Create missing owner org before repo creation")
     parser.add_argument("--probe-ssh", action="store_true", help="Run optional git ls-remote using per-project SSH command env var")
+    parser.add_argument("--allow-live-enabled", action="store_true", help="accept persistent live publishing only with explicit redacted ssh_command credential policy")
     parser.add_argument("--emit-worker-preflight", action="store_true")
     args = parser.parse_args()
 
@@ -303,7 +324,7 @@ def main() -> int:
 
     findings: list[Finding] = []
     findings.extend(validate_shape(inventory, repo))
-    findings.extend(check_runtime_status(repo, args.status_url))
+    findings.extend(check_runtime_status(repo, args.status_url, allow_live_enabled=args.allow_live_enabled))
     findings.extend(check_forgejo_reachability(inventory))
     token_env = args.token_env or str(inventory.get("forgejo", {}).get("adminTokenEnv", "DEN_CODE_GATE_ADMIN_TOKEN"))
     token = os.environ.get(token_env)

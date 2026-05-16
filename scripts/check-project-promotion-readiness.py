@@ -163,6 +163,16 @@ def policy_by_project(status: dict[str, Any], project_id: str) -> dict[str, Any]
     return None
 
 
+def live_credential_policy_is_explicit_and_redacted(status: dict[str, Any]) -> bool:
+    credential = status.get("liveCredentialPolicy", {})
+    return (
+        credential.get("configured") is True
+        and credential.get("display") == "ssh_command"
+        and credential.get("value") == "[redacted]"
+        and bool(credential.get("fingerprint"))
+    )
+
+
 def check(status: str, message: str, **extra: Any) -> dict[str, Any]:
     payload = {"status": status, "message": message}
     payload.update(extra)
@@ -200,6 +210,7 @@ def evaluate_project(
     mcp_tools: dict[str, Any],
     den_projects: dict[str, dict[str, Any]] | None = None,
     run_subchecks: bool = True,
+    allow_live_enabled: bool = False,
 ) -> dict[str, Any]:
     den_projects = den_projects or {}
     promotion = project_by_id(promotion_inventory, project_id)
@@ -282,17 +293,32 @@ def evaluate_project(
     else:
         checks["runtime_status"] = check("ok", "den-publish runtime status contract is v2")
 
-    if status.get("livePublishing", {}).get("enabled") is True:
-        checks["live_publish_disabled"] = check("error", "live publishing is enabled; readiness preflight fails closed")
-        blockers.append("live_publish_enabled")
+    live_enabled = status.get("livePublishing", {}).get("enabled") is True
+    live_credential_configured = status.get("liveCredentialPolicy", {}).get("configured") is True
+    if allow_live_enabled:
+        if not live_enabled:
+            checks["live_publish_enabled"] = check("error", "approved-live mode requires live publishing to be enabled")
+            blockers.append("live_publishing_not_enabled")
+            checks["live_credentials_enabled"] = check("error", "approved-live mode requires an explicit redacted credential policy")
+            blockers.append("live_credential_policy_missing")
+        elif live_credential_policy_is_explicit_and_redacted(status):
+            checks["live_publish_enabled"] = check("ok", "live publishing is enabled with explicit redacted credential policy")
+            checks["live_credentials_enabled"] = check("ok", "live credential policy is configured and redacted")
+        else:
+            checks["live_publish_enabled"] = check("error", "live publishing is enabled but credential policy is not explicit ssh_command/redacted/fingerprinted")
+            blockers.append("live_credential_policy_invalid")
+            checks["live_credentials_enabled"] = check("error", "live credential policy is missing, unredacted, not ssh_command, or lacks fingerprint")
     else:
-        checks["live_publish_disabled"] = check("ok", "live publishing is disabled")
-
-    if status.get("liveCredentialPolicy", {}).get("configured") is True:
-        checks["live_credentials_disabled"] = check("error", "live credential policy is configured outside a scoped approval window")
-        blockers.append("live_credential_configured")
-    else:
-        checks["live_credentials_disabled"] = check("ok", "live credential policy is not configured")
+        if live_enabled:
+            checks["live_publish_disabled"] = check("error", "live publishing is enabled; readiness preflight fails closed")
+            blockers.append("live_publish_enabled")
+        else:
+            checks["live_publish_disabled"] = check("ok", "live publishing is disabled")
+        if live_credential_configured:
+            checks["live_credentials_disabled"] = check("error", "live credential policy is configured outside a scoped approval window")
+            blockers.append("live_credential_configured")
+        else:
+            checks["live_credentials_disabled"] = check("ok", "live credential policy is not configured")
 
     if runtime_policy is None:
         checks["runtime_policy"] = check("missing", "project missing from den-publish runtime policy")
@@ -309,9 +335,9 @@ def evaluate_project(
 
     if run_subchecks:
         subchecks: list[dict[str, Any]] = []
-        subchecks.append(run_subcheck([sys.executable, "scripts/check-promotion-metadata-drift.py", "--project", project_id]))
+        subchecks.append(run_subcheck([sys.executable, "scripts/check-promotion-metadata-drift.py", "--project", project_id, *(["--allow-live-enabled"] if allow_live_enabled else [])]))
         if code_gate_repo is not None:
-            subchecks.append(run_subcheck([sys.executable, "scripts/check-code-gate-repo.py", "--project", project_id]))
+            subchecks.append(run_subcheck([sys.executable, "scripts/check-code-gate-repo.py", "--project", project_id, *(["--allow-live-enabled"] if allow_live_enabled else [])]))
         checks["subchecks"] = {"status": "ok" if all(item["returncode"] == 0 for item in subchecks) else "warning", "runs": subchecks}
 
     if blockers:
@@ -390,6 +416,7 @@ def main() -> int:
     parser.add_argument("--den-projects-url", default=DEFAULT_DEN_PROJECTS_URL)
     parser.add_argument("--den-projects-file", type=Path)
     parser.add_argument("--no-subchecks", action="store_true")
+    parser.add_argument("--allow-live-enabled", action="store_true", help="accept persistent live publishing only with explicit redacted ssh_command credential policy")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -402,6 +429,7 @@ def main() -> int:
             mcp_tools=load_mcp_tools(args.mcp_tools_file, args.mcp_url),
             den_projects=load_den_projects(args.den_projects_file, args.den_projects_url),
             run_subchecks=not args.no_subchecks,
+            allow_live_enabled=args.allow_live_enabled,
         )
     except ReadinessError as exc:
         print(f"readiness_checker=error: {exc}", file=sys.stderr)

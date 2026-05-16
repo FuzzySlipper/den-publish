@@ -163,24 +163,42 @@ def check_mcp_facade(url: str) -> list[Finding]:
     return []
 
 
-def check_status_payload(status: Any) -> list[Finding]:
+def live_credential_policy_is_explicit_and_redacted(status: dict[str, Any]) -> bool:
+    credential = status.get("liveCredentialPolicy", {})
+    return (
+        credential.get("configured") is True
+        and credential.get("display") == "ssh_command"
+        and credential.get("value") == "[redacted]"
+        and bool(credential.get("fingerprint"))
+    )
+
+
+def check_status_payload(status: Any, *, allow_live_enabled: bool = False) -> list[Finding]:
     findings: list[Finding] = []
     if not isinstance(status, dict) or status.get("configurationContract") != "den-publish-runtime-config-v2":
         findings.append(Finding("error", "den_publish_status", "bad_contract", "den-publish /config/status is not runtime config v2"))
         return findings
-    if status.get("livePublishing", {}).get("enabled") is True:
-        findings.append(Finding("error", "den_publish_status", "live_publishing_enabled", "livePublishing.enabled=true outside an approval window"))
-    if status.get("liveCredentialPolicy", {}).get("configured") is True:
-        findings.append(Finding("error", "den_publish_status", "live_credentials_configured", "live credential policy is configured outside an approval window"))
+    live_enabled = status.get("livePublishing", {}).get("enabled") is True
+    live_credential_configured = status.get("liveCredentialPolicy", {}).get("configured") is True
+    if allow_live_enabled:
+        if not live_enabled:
+            findings.append(Finding("error", "den_publish_status", "live_publishing_not_enabled", "approved-live mode requires livePublishing.enabled=true"))
+        elif not live_credential_policy_is_explicit_and_redacted(status):
+            findings.append(Finding("error", "den_publish_status", "live_credentials_not_explicit_redacted", "live publishing is enabled but credential policy is not explicit ssh_command with redacted value and fingerprint"))
+    else:
+        if live_enabled:
+            findings.append(Finding("error", "den_publish_status", "live_publishing_enabled", "livePublishing.enabled=true outside an approval window"))
+        if live_credential_configured:
+            findings.append(Finding("error", "den_publish_status", "live_credentials_configured", "live credential policy is configured outside an approval window"))
     return findings
 
 
-def check_status(url: str) -> tuple[dict[str, Any] | None, list[Finding]]:
+def check_status(url: str, *, allow_live_enabled: bool = False) -> tuple[dict[str, Any] | None, list[Finding]]:
     try:
         status = fetch_json(url)
     except Exception as exc:
         return None, [Finding("error", "den_publish_status", "unreachable", "den-publish /config/status is unreachable", str(exc))]
-    return status, check_status_payload(status)
+    return status, check_status_payload(status, allow_live_enabled=allow_live_enabled)
 
 
 MONITORED_PROJECT_STATUSES = {"dry_run_ready", "code_gate_repo_and_read_key_provisioned"}
@@ -227,13 +245,14 @@ def run_subcheck(component: str, command: list[str], *, warning_is_failure: bool
     return [Finding(severity, component, "subcheck_failed", f"subcheck exited {proc.returncode}: {' '.join(command)}", tail)]
 
 
-def check_project_readiness(project_id: str) -> list[Finding]:
+def check_project_readiness(project_id: str, *, allow_live_enabled: bool = False) -> list[Finding]:
     proc = run_command([
         sys.executable,
         "scripts/check-project-promotion-readiness.py",
         "--project",
         project_id,
         "--json",
+        *(["--allow-live-enabled"] if allow_live_enabled else []),
     ], timeout=120)
     if proc.returncode != 0:
         tail = "\n".join((proc.stdout + proc.stderr).splitlines()[-12:])
@@ -262,15 +281,15 @@ def collect_findings(args: argparse.Namespace) -> tuple[list[Finding], dict[str,
     summary["monitoredProjects"] = all_project_ids
 
     findings.extend(check_systemd_service(args.systemd_scope, args.tunnel_service, args.service_user))
-    status, status_findings = check_status(args.status_url)
+    status, status_findings = check_status(args.status_url, allow_live_enabled=args.allow_live_enabled)
     findings.extend(status_findings)
     findings.extend(check_runtime_inventory_alignment(all_project_ids, status))
     findings.extend(check_mcp_facade(args.mcp_url))
 
-    findings.extend(run_subcheck("metadata", [sys.executable, "scripts/check-promotion-metadata-drift.py"], warning_is_failure=True))
+    findings.extend(run_subcheck("metadata", [sys.executable, "scripts/check-promotion-metadata-drift.py", *(["--allow-live-enabled"] if args.allow_live_enabled else [])], warning_is_failure=True))
     for project_id in project_ids:
-        findings.extend(check_project_readiness(project_id))
-        findings.extend(run_subcheck("code_gate", [sys.executable, "scripts/check-code-gate-repo.py", "--project", project_id]))
+        findings.extend(check_project_readiness(project_id, allow_live_enabled=args.allow_live_enabled))
+        findings.extend(run_subcheck("code_gate", [sys.executable, "scripts/check-code-gate-repo.py", "--project", project_id, *(["--allow-live-enabled"] if args.allow_live_enabled else [])]))
 
     summary["findingCount"] = len(findings)
     summary["errorCount"] = sum(1 for finding in findings if finding.severity == "error")
@@ -292,6 +311,7 @@ def main() -> int:
     parser.add_argument("--systemd-scope", choices=["system", "user"], default="system")
     parser.add_argument("--service-user", default=None, help="user for --systemd-scope=user checks")
     parser.add_argument("--project", help="limit project readiness checks to one dry-run-ready project")
+    parser.add_argument("--allow-live-enabled", action="store_true", help="accept persistent live publishing only when an explicit redacted ssh_command credential policy is configured")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--verbose", action="store_true", help="print an OK summary when healthy")
     args = parser.parse_args()

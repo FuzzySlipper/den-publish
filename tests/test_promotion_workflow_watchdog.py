@@ -44,6 +44,55 @@ def test_status_check_fails_closed_for_live_publish_enabled():
     assert any(f.code == "live_publishing_enabled" and f.severity == "error" for f in findings)
 
 
+def test_status_check_allows_approved_redacted_live_policy():
+    module = load_module()
+    status = {
+        "configurationContract": "den-publish-runtime-config-v2",
+        "livePublishing": {"enabled": True},
+        "liveCredentialPolicy": {
+            "configured": True,
+            "display": "ssh_command",
+            "value": "[redacted]",
+            "fingerprint": "abcdef1234567890",
+        },
+    }
+
+    findings = module.check_status_payload(status, allow_live_enabled=True)
+
+    assert findings == []
+
+
+def test_status_check_requires_live_enabled_in_approved_mode():
+    module = load_module()
+    status = {
+        "configurationContract": "den-publish-runtime-config-v2",
+        "livePublishing": {"enabled": False},
+        "liveCredentialPolicy": {"configured": False},
+    }
+
+    findings = module.check_status_payload(status, allow_live_enabled=True)
+
+    assert any(f.code == "live_publishing_not_enabled" and f.severity == "error" for f in findings)
+
+
+def test_status_check_rejects_unredacted_live_policy_even_when_allowed():
+    module = load_module()
+    status = {
+        "configurationContract": "den-publish-runtime-config-v2",
+        "livePublishing": {"enabled": True},
+        "liveCredentialPolicy": {
+            "configured": True,
+            "display": "ssh_command",
+            "value": "ssh -i /secret/key",
+            "fingerprint": "abcdef1234567890",
+        },
+    }
+
+    findings = module.check_status_payload(status, allow_live_enabled=True)
+
+    assert any(f.code == "live_credentials_not_explicit_redacted" for f in findings)
+
+
 def test_runtime_inventory_alignment_reports_missing_policy():
     module = load_module()
     status = {
@@ -84,6 +133,7 @@ def test_project_filter_alignment_uses_full_monitored_inventory(monkeypatch):
         "service_user": None,
         "status_url": "http://127.0.0.1:5090/config/status",
         "mcp_url": "http://192.168.1.10:5199/mcp",
+        "allow_live_enabled": False,
     })()
     inventory = {
         "projects": [
@@ -100,10 +150,10 @@ def test_project_filter_alignment_uses_full_monitored_inventory(monkeypatch):
 
     monkeypatch.setattr(module, "load_json", lambda path: inventory)
     monkeypatch.setattr(module, "check_systemd_service", lambda *args: [])
-    monkeypatch.setattr(module, "check_status", lambda url: (status, []))
+    monkeypatch.setattr(module, "check_status", lambda url, **kwargs: (status, []))
     monkeypatch.setattr(module, "check_mcp_facade", lambda url: [])
     monkeypatch.setattr(module, "run_subcheck", lambda *args, **kwargs: [])
-    monkeypatch.setattr(module, "check_project_readiness", lambda project_id: [])
+    monkeypatch.setattr(module, "check_project_readiness", lambda project_id, **kwargs: [])
 
     findings, summary = module.collect_findings(args)
 

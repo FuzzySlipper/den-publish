@@ -205,6 +205,55 @@ def test_live_publish_enabled_fails_closed_even_when_project_metadata_is_ready(t
     assert result["checks"]["live_publish_disabled"]["status"] == "error"
 
 
+def test_approved_live_mode_requires_live_enabled(tmp_path: Path):
+    module = load_module()
+    project_id = "den-channels"
+
+    result = module.evaluate_project(
+        project_id,
+        promotion_inventory=promotion_inventory(promotion_project(project_id)),
+        code_gate_inventory=code_gate_inventory(project_id),
+        status=status_payload(project_id, live=False, credential=False),
+        mcp_tools=mcp_tools_payload(),
+        den_projects={project_id: {"root_path": project_id}},
+        run_subchecks=False,
+        allow_live_enabled=True,
+    )
+
+    assert result["classification"] == "blocked"
+    assert result["ready"] is False
+    assert result["checks"]["live_publish_enabled"]["status"] == "error"
+    assert result["checks"]["live_credentials_enabled"]["status"] == "error"
+
+
+def test_approved_live_mode_accepts_redacted_credential_policy(tmp_path: Path):
+    module = load_module()
+    project_id = "den-channels"
+    status = status_payload(project_id, live=True, credential=True)
+    status["liveCredentialPolicy"] = {
+        "configured": True,
+        "display": "ssh_command",
+        "value": "[redacted]",
+        "fingerprint": "abcdef1234567890",
+    }
+
+    result = module.evaluate_project(
+        project_id,
+        promotion_inventory=promotion_inventory(promotion_project(project_id)),
+        code_gate_inventory=code_gate_inventory(project_id),
+        status=status,
+        mcp_tools=mcp_tools_payload(),
+        den_projects={project_id: {"root_path": project_id}},
+        run_subchecks=False,
+        allow_live_enabled=True,
+    )
+
+    assert result["classification"] == "ready"
+    assert result["ready"] is True
+    assert result["checks"]["live_publish_enabled"]["status"] == "ok"
+    assert result["checks"]["live_credentials_enabled"]["status"] == "ok"
+
+
 def test_cli_prints_json_and_returns_nonzero_for_unready_project(tmp_path: Path):
     project_id = "den-core"
     promotion_path = write_json(tmp_path / "promotion.json", promotion_inventory(promotion_project(project_id, code_gate=False)))

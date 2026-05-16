@@ -1,6 +1,6 @@
 # Promotion workflow watchdog
 
-`script/check-promotion-workflow-watchdog.py` is the quiet, secret-free drift check for the default Den code promotion path:
+`scripts/check-promotion-workflow-watchdog.py` is the quiet, secret-free drift check for the default Den code promotion path:
 
 ```text
 worker -> den-code-gate immutable ref -> Den review state -> Den Core MCP facade -> den-publish dry-run -> approval-gated live publish
@@ -24,7 +24,16 @@ Use `--verbose` for a human OK line and `--json` for structured output:
 ```bash
 python3 scripts/check-promotion-workflow-watchdog.py --verbose
 python3 scripts/check-promotion-workflow-watchdog.py --json
+python3 scripts/check-promotion-workflow-watchdog.py --allow-live-enabled --json
 ```
+
+After #1468 live enablement, persistent live publishing is expected only when the operator intentionally opts into approved-live monitoring:
+
+```bash
+python3 scripts/check-promotion-workflow-watchdog.py --allow-live-enabled --json
+```
+
+Without `--allow-live-enabled`, the watchdog remains fail-closed and reports persistent live publishing/credentials as drift. This gives scheduled jobs a deliberate choice between pre-live safety policy and post-live approved-production policy.
 
 ## Checks performed
 
@@ -32,8 +41,9 @@ The watchdog verifies:
 
 - `den-publish-den-core-tunnel.service` is active and enabled as a system service;
 - local `den-publish` `/config/status` is reachable and reports `den-publish-runtime-config-v2`;
-- `livePublishing.enabled=false`;
-- `liveCredentialPolicy.configured=false`;
+- default mode fails closed when `livePublishing.enabled=true`;
+- default mode fails closed when `liveCredentialPolicy.configured=true`;
+- approved-live mode (`--allow-live-enabled`) accepts persistent live publishing only when `/config/status` reports an explicit `ssh_command` credential policy with value `[redacted]` and a fingerprint;
 - the public Den MCP facade exposes `request_den_publish_dry_run`;
 - monitored promotion inventory projects match runtime project policy;
 - `scripts/check-promotion-metadata-drift.py` reports no errors;
@@ -57,8 +67,9 @@ Common findings:
 |---|---|---|---|
 | `systemd` | `service_not_active` / `service_not_enabled` | Den Core may not be able to reach den-publish through the reverse tunnel. | Inspect `systemctl status den-publish-den-core-tunnel.service`; do not edit unit files without approval. |
 | `den_publish_status` | `unreachable` | Local den-publish API is down or not listening on the expected loopback port. | Check `den-publish.service` logs/status. |
-| `den_publish_status` | `live_publishing_enabled` | Live publishing is enabled outside an approval window. | Treat as high-priority drift; verify whether an approved live window is active. |
-| `den_publish_status` | `live_credentials_configured` | Live canonical credentials are configured outside an approval window. | Treat as high-priority drift; verify approval and rollback posture. |
+| `den_publish_status` | `live_publishing_enabled` | Live publishing is enabled while the checker is running in default fail-closed mode. | If #1468 production live mode is approved, rerun with `--allow-live-enabled`; otherwise rollback/disable live. |
+| `den_publish_status` | `live_credentials_configured` | Live canonical credentials are configured while the checker is running in default fail-closed mode. | If #1468 production live mode is approved, rerun with `--allow-live-enabled`; otherwise rollback/disable live. |
+| `den_publish_status` | `live_credentials_not_explicit_redacted` | Approved-live mode saw live enabled but the credential policy was not explicit/redacted/fingerprinted. | Stop publishing and inspect service env/status; do not continue until status redaction is restored. |
 | `mcp_facade` | `dry_run_tool_missing` | Den Core MCP facade no longer exposes the standard dry-run tool. | Inspect Den Core deployment/config before launching promotion work. |
 | `metadata` | `runtime_policy_missing` | A monitored inventory project is absent from den-publish runtime policy. | Re-run metadata drift checker; do not hot-patch service config without an approval plan. |
 | `readiness` | `project_unready` / `project_not_ready` | A per-project readiness preflight no longer classifies ready. | Run `python3 scripts/check-project-promotion-readiness.py --project <project> --json`. |
@@ -82,4 +93,5 @@ Current rollout verification command:
 ```bash
 python3 -m pytest tests/test_promotion_workflow_watchdog.py tests/test_project_promotion_readiness.py -q
 python3 scripts/check-promotion-workflow-watchdog.py --json
+python3 scripts/check-promotion-workflow-watchdog.py --allow-live-enabled --json
 ```

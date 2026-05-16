@@ -12,8 +12,8 @@ The deployed service is expected to remain in this state until the final gate is
 - bind address: `127.0.0.1:5090`
 - runtime root: `/home/agents/runtime/den-publish`
 - service env path: `/home/agent/.config/den-publish/den-publish.env`
-- live publishing: disabled
-- credential policy: missing/not configured
+- before approval: live publishing disabled and credential policy missing/not configured
+- after explicit #1468 approval: live publishing may remain enabled only with an explicit redacted `ssh_command` credential policy visible in `/config/status`
 - `/promotion/dry-run`: validate-only only
 - `/promotion/publish`: fails closed with `credential_unavailable`
 
@@ -24,7 +24,7 @@ curl -fsS http://127.0.0.1:5090/readyz
 curl -fsS http://127.0.0.1:5090/config/status
 ```
 
-`/config/status` must report `configurationContract=den-publish-runtime-config-v2`, `livePublishing.enabled=false`, and `liveCredentialPolicy.configured=false` before this runbook starts.
+Before this runbook starts, `/config/status` must report `configurationContract=den-publish-runtime-config-v2`, `livePublishing.enabled=false`, and `liveCredentialPolicy.configured=false`. After a separate approval to leave live publish enabled, `/config/status` must instead report live enabled plus `liveCredentialPolicy.display=ssh_command`, `value=[redacted]`, and a fingerprint.
 
 ## Approval required
 
@@ -145,6 +145,16 @@ git push <canonical> :refs/heads/<smoke-branch>
 Run deletion with the same explicit credential policy, not ambient credentials. Verify `git ls-remote` no longer returns the branch.
 
 If live publishing should not remain enabled after the smoke, remove `DenPublish__Publishing__Enabled`, `DenPublish__Publishing__CredentialMode`, and `DenPublish__Publishing__GitSshCommand` from the service env, restart, and verify `/promotion/publish` again fails closed with `credential_unavailable` and does not append audit records.
+
+If live publishing is approved to remain enabled, run post-live drift checks in approved-live mode:
+
+```bash
+cd /home/dev/den-publish
+python3 scripts/check-promotion-workflow-watchdog.py --allow-live-enabled --json
+python3 scripts/check-project-promotion-readiness.py --project den-publish --allow-live-enabled --json
+```
+
+The same scripts without `--allow-live-enabled` intentionally remain fail-closed and should report live publishing as drift.
 
 ## Documentation packet
 

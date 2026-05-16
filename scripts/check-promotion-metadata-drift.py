@@ -110,6 +110,16 @@ def setting_fingerprint(setting: Any) -> str | None:
     return None
 
 
+def live_credential_policy_is_explicit_and_redacted(status: dict[str, Any]) -> bool:
+    credential = status.get("liveCredentialPolicy", {})
+    return (
+        credential.get("configured") is True
+        and credential.get("display") == "ssh_command"
+        and credential.get("value") == "[redacted]"
+        and bool(credential.get("fingerprint"))
+    )
+
+
 def list_value(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -265,6 +275,7 @@ def main() -> int:
     parser.add_argument("--status-file", type=Path, help="read a captured /config/status JSON instead of HTTP")
     parser.add_argument("--project", help="limit checks to a single project id")
     parser.add_argument("--probe-code-gate", action="store_true", help="run optional git ls-remote probes when per-project SSH command env vars are present")
+    parser.add_argument("--allow-live-enabled", action="store_true", help="accept persistent live publishing only with explicit redacted ssh_command credential policy")
     parser.add_argument("--emit-dry-run-skeleton", metavar="PROJECT_ID", help="print a dry-run request skeleton for the named project and exit")
     args = parser.parse_args()
 
@@ -286,8 +297,18 @@ def main() -> int:
     status = load_json(args.status_file) if args.status_file else fetch_status(args.status_url)
     if status.get("configurationContract") != "den-publish-runtime-config-v2":
         findings.append(Finding("error", "_service", "bad_config_contract", "den-publish /config/status is not den-publish-runtime-config-v2"))
-    if status.get("livePublishing", {}).get("enabled") is True:
-        findings.append(Finding("error", "_service", "live_publishing_enabled", "persistent den-publish service reports livePublishing.enabled=true"))
+    live_enabled = status.get("livePublishing", {}).get("enabled") is True
+    live_credential_configured = status.get("liveCredentialPolicy", {}).get("configured") is True
+    if args.allow_live_enabled:
+        if not live_enabled:
+            findings.append(Finding("error", "_service", "live_publishing_not_enabled", "approved-live mode requires livePublishing.enabled=true"))
+        elif not live_credential_policy_is_explicit_and_redacted(status):
+            findings.append(Finding("error", "_service", "live_credentials_not_explicit_redacted", "live publishing is enabled but credential policy is not explicit ssh_command with redacted value and fingerprint"))
+    else:
+        if live_enabled:
+            findings.append(Finding("error", "_service", "live_publishing_enabled", "persistent den-publish service reports livePublishing.enabled=true"))
+        if live_credential_configured:
+            findings.append(Finding("error", "_service", "live_credentials_configured", "persistent den-publish service reports live credential policy configured"))
     for warning in status.get("warnings", []) or []:
         code = warning.get("code", "runtime_warning") if isinstance(warning, dict) else "runtime_warning"
         message = warning.get("message", str(warning)) if isinstance(warning, dict) else str(warning)
