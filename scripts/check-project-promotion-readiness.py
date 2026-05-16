@@ -149,6 +149,13 @@ def repo_by_project(inventory: dict[str, Any], project_id: str) -> dict[str, Any
     return None
 
 
+def non_promotion_target_by_id(inventory: dict[str, Any], project_id: str) -> dict[str, Any] | None:
+    for target in inventory.get("nonPromotionTargets", []) or []:
+        if isinstance(target, dict) and target.get("projectId") == project_id:
+            return target
+    return None
+
+
 def policy_by_project(status: dict[str, Any], project_id: str) -> dict[str, Any] | None:
     for policy in status.get("projectPolicies", []) or []:
         if isinstance(policy, dict) and policy.get("projectId") == project_id:
@@ -199,6 +206,7 @@ def evaluate_project(
     code_gate_repo = repo_by_project(code_gate_inventory, project_id)
     runtime_policy = policy_by_project(status, project_id)
     den_project = den_projects.get(project_id)
+    non_promotion_target = non_promotion_target_by_id(promotion_inventory, project_id)
 
     checks: dict[str, dict[str, Any]] = {}
     next_actions: list[str] = []
@@ -215,6 +223,31 @@ def evaluate_project(
         else:
             checks["den_project"] = check("warning", "Den project exists but has no root path")
             next_actions.append("Clarify whether this project has a standalone code repository/root path.")
+
+    if non_promotion_target is not None:
+        reason = str(non_promotion_target.get("reason") or "project is not a standalone promotion target")
+        route_through = non_promotion_target.get("routeThroughProjectId")
+        checks["promotion_metadata"] = check(
+            "not_applicable",
+            "project is explicitly marked as not a standalone promotion target",
+            reason=reason,
+            routeThroughProjectId=route_through,
+        )
+        checks["code_gate_inventory"] = check("not_applicable", "no standalone code-gate repository required")
+        checks["runtime_policy"] = check("not_applicable", "no standalone den-publish runtime policy required")
+        action = f"Do not onboard {project_id} as a standalone promotion target."
+        if route_through:
+            action += f" Route work through {route_through}."
+        return {
+            "schema": "den_project_promotion_readiness",
+            "schemaVersion": 1,
+            "projectId": project_id,
+            "classification": "not_applicable",
+            "ready": False,
+            "requiresApproval": False,
+            "checks": checks,
+            "nextActions": [action, reason],
+        }
 
     if promotion is None:
         checks["promotion_metadata"] = check("missing", "project missing from promotion metadata inventory")

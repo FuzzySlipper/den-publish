@@ -65,7 +65,7 @@ python3 scripts/check-project-promotion-readiness.py \
 | `needs_code_gate` | Project lacks code-gate repo inventory or code-gate fields. | Prepare approval packet for Forgejo repo/access provisioning. |
 | `needs_runtime_policy` | Inventory exists but `den-publish` runtime policy is missing. | Add indexed persistent service policy after approval. |
 | `blocked` | Fail-closed condition. | Fix blocker before worker/reviewer/dry-run use. |
-| `not_applicable` | Den project is not a standalone code project. | Do not onboard unless scope changes. |
+| `not_applicable` | Den project is not a standalone code project, either because it has no root or because `config/promotion-projects.json` marks it under `nonPromotionTargets`. | Do not onboard unless scope changes; route work through the owning repo when supplied. |
 
 ## Fail-closed checks
 
@@ -76,6 +76,8 @@ The checker blocks if:
 - live credential policy is configured outside a scoped approval window;
 - the public MCP facade does not expose `request_den_publish_dry_run`;
 - required canonical metadata fields are absent.
+
+Projects listed in top-level `nonPromotionTargets[]` are classified as `not_applicable` without requiring Forgejo/runtime approval; include a `reason` and, when applicable, `routeThroughProjectId`.
 
 ## Subchecks
 

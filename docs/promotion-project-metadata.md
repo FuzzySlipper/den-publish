@@ -33,7 +33,7 @@ Each project entry uses `schema=den_promotion_project_inventory`, `schemaVersion
 | Field | Required for dry-run? | Required for live? | Notes |
 | --- | --- | --- | --- |
 | `projectId` | yes | yes | Den project id and den-publish policy key. |
-| `status` | yes | yes | `dry_run_ready` means preflight must pass before a dry-run starts; `metadata_incomplete` is an explicit blocker. |
+| `status` | yes | yes | `dry_run_ready` means preflight must pass before a dry-run starts; `pending_code_gate_provisioning` means canonical metadata is known but Forgejo/runtime policy is not yet approved/provisioned; `metadata_incomplete` is an explicit blocker. |
 | `canonicalRemoteUrl` | yes | yes | Expected canonical remote, e.g. `git@github.com:FuzzySlipper/den-channels.git`. No credentials embedded. |
 | `targetRemoteName` | yes | yes | Usually `canonical`. |
 | `defaultBaseBranch` | yes | yes | Usually `main`. |
@@ -48,6 +48,7 @@ Each project entry uses `schema=den_promotion_project_inventory`, `schemaVersion
 | `allowedPathPrefixes` | yes | yes | Empty array means no project-specific prefix narrowing beyond task/review policy. |
 | `dryRunRequires` | yes | yes | Human-readable checklist. |
 | `livePublishRequires` | no | yes | Human-readable approval/rollback checklist. |
+| `nonPromotionTargets[]` | no | no | Optional top-level list of Den projects that should not get standalone promotion policy, with rationale and optional `routeThroughProjectId`. |
 
 ## Current inventory snapshot
 
@@ -95,6 +96,27 @@ Status: `metadata_incomplete`.
 Known canonical remote from `/home/dev/den-mcp`: `git@github.com:FuzzySlipper/den-mcp.git`.
 
 Current blocker: no code-gate repo/read route is recorded in the inventory or live `/config/status`.
+
+### Remaining reachable code projects added by #1446
+
+Status: `pending_code_gate_provisioning`. These entries have secret-free canonical/code-gate metadata only; Forgejo code-gate repo creation, deploy keys, service-side read credentials, and persistent runtime policy remain approval-gated before dry-run use.
+
+| Project | Canonical remote | Default base | Next gate |
+| --- | --- | --- | --- |
+| `den-router` | `git@github.com:FuzzySlipper/den-router.git` | `main` | code-gate repo/access + runtime policy approval |
+| `discourser-mcp` | `git@github.com:FuzzySlipper/discourser-mcp.git` | `main` | code-gate repo/access + runtime policy approval |
+| `md-post` | `git@github.com:FuzzySlipper/md-post.git` | `master` | code-gate repo/access + runtime policy approval |
+| `agora-os` | `git@github.com:FuzzySlipper/agora-os.git` | `main` | code-gate repo/access + runtime policy approval |
+| `quillforge` | `git@github.com:FuzzySlipper/quillforge.git` | `main` | code-gate repo/access + runtime policy approval |
+| `voxelforge` | `git@github.com:FuzzySlipper/voxelforge.git` | `main` | code-gate repo/access + runtime policy approval |
+
+### Explicit non-standalone targets
+
+The inventory may mark projects under `nonPromotionTargets` so readiness checks do not turn product/workstream spaces into accidental standalone onboarding work. Current entries:
+
+- `den-desktop` routes through `den-mcp` because code lives in the `den-mcp` repo.
+- `den-network` is an infrastructure/documentation space.
+- `den-gateway` and `den-hermes-bridge` have no confirmed standalone repo/root yet.
 
 ## Drift checker
 

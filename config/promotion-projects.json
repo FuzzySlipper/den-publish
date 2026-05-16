@@ -148,6 +148,235 @@
         "explicit redacted credential policy"
       ],
       "notes": "Compatibility facade repo; prepare only if future direct changes need the shared code-gate workflow. Code-gate inventory declared in #1442; Forgejo repo/access creation and runtime service credential remain approval-gated. Forgejo org/repo and read-only den-publish.service deploy key were provisioned in #1442; persistent runtime policy remains #1443."
+    },
+    {
+      "projectId": "den-router",
+      "status": "pending_code_gate_provisioning",
+      "canonicalRemoteUrl": "git@github.com:FuzzySlipper/den-router.git",
+      "targetRemoteName": "canonical",
+      "defaultBaseBranch": "main",
+      "allowedOperations": [
+        "push_branch"
+      ],
+      "pushBranchPrefixes": [
+        "task/"
+      ],
+      "fastForwardBranches": [
+        "main"
+      ],
+      "codeGateInstance": "den-code-gate",
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/den-router/den-router.git",
+      "codeGateRepo": "den-router/den-router.git",
+      "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
+      "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
+      "allowedPathPrefixes": [],
+      "dryRunRequires": [
+        "codeGateRemoteUrl",
+        "code-gate repo exists in den-code-gate",
+        "service-side code-gate read route configured in den-publish /config/status",
+        "immutable ingress_ref/head/base metadata from Den submission packet",
+        "matching looks_good Den review round"
+      ],
+      "livePublishRequires": [
+        "all dryRunRequires",
+        "explicit live smoke approval",
+        "explicit redacted credential policy"
+      ],
+      "notes": "Reachable canonical remote confirmed by read-only ls-remote for #1446. Secret-free metadata only; code-gate repo/deploy keys and persistent runtime policy remain approval-gated before dry-run use."
+    },
+    {
+      "projectId": "discourser-mcp",
+      "status": "pending_code_gate_provisioning",
+      "canonicalRemoteUrl": "git@github.com:FuzzySlipper/discourser-mcp.git",
+      "targetRemoteName": "canonical",
+      "defaultBaseBranch": "main",
+      "allowedOperations": [
+        "push_branch"
+      ],
+      "pushBranchPrefixes": [
+        "task/"
+      ],
+      "fastForwardBranches": [
+        "main"
+      ],
+      "codeGateInstance": "den-code-gate",
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/discourser-mcp/discourser-mcp.git",
+      "codeGateRepo": "discourser-mcp/discourser-mcp.git",
+      "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
+      "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
+      "allowedPathPrefixes": [],
+      "dryRunRequires": [
+        "codeGateRemoteUrl",
+        "code-gate repo exists in den-code-gate",
+        "service-side code-gate read route configured in den-publish /config/status",
+        "immutable ingress_ref/head/base metadata from Den submission packet",
+        "matching looks_good Den review round"
+      ],
+      "livePublishRequires": [
+        "all dryRunRequires",
+        "explicit live smoke approval",
+        "explicit redacted credential policy"
+      ],
+      "notes": "Reachable canonical remote confirmed by read-only ls-remote for #1446. Secret-free metadata only; code-gate repo/deploy keys and persistent runtime policy remain approval-gated before dry-run use."
+    },
+    {
+      "projectId": "md-post",
+      "status": "pending_code_gate_provisioning",
+      "canonicalRemoteUrl": "git@github.com:FuzzySlipper/md-post.git",
+      "targetRemoteName": "canonical",
+      "defaultBaseBranch": "master",
+      "allowedOperations": [
+        "push_branch"
+      ],
+      "pushBranchPrefixes": [
+        "task/"
+      ],
+      "fastForwardBranches": [
+        "master"
+      ],
+      "codeGateInstance": "den-code-gate",
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/md-post/md-post.git",
+      "codeGateRepo": "md-post/md-post.git",
+      "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
+      "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
+      "allowedPathPrefixes": [],
+      "dryRunRequires": [
+        "codeGateRemoteUrl",
+        "code-gate repo exists in den-code-gate",
+        "service-side code-gate read route configured in den-publish /config/status",
+        "immutable ingress_ref/head/base metadata from Den submission packet",
+        "matching looks_good Den review round"
+      ],
+      "livePublishRequires": [
+        "all dryRunRequires",
+        "explicit live smoke approval",
+        "explicit redacted credential policy"
+      ],
+      "notes": "Reachable canonical remote confirmed by read-only ls-remote for #1446. Secret-free metadata only; code-gate repo/deploy keys and persistent runtime policy remain approval-gated before dry-run use."
+    },
+    {
+      "projectId": "agora-os",
+      "status": "pending_code_gate_provisioning",
+      "canonicalRemoteUrl": "git@github.com:FuzzySlipper/agora-os.git",
+      "targetRemoteName": "canonical",
+      "defaultBaseBranch": "main",
+      "allowedOperations": [
+        "push_branch"
+      ],
+      "pushBranchPrefixes": [
+        "task/"
+      ],
+      "fastForwardBranches": [
+        "main"
+      ],
+      "codeGateInstance": "den-code-gate",
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/agora-os/agora-os.git",
+      "codeGateRepo": "agora-os/agora-os.git",
+      "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
+      "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
+      "allowedPathPrefixes": [],
+      "dryRunRequires": [
+        "codeGateRemoteUrl",
+        "code-gate repo exists in den-code-gate",
+        "service-side code-gate read route configured in den-publish /config/status",
+        "immutable ingress_ref/head/base metadata from Den submission packet",
+        "matching looks_good Den review round"
+      ],
+      "livePublishRequires": [
+        "all dryRunRequires",
+        "explicit live smoke approval",
+        "explicit redacted credential policy"
+      ],
+      "notes": "Reachable canonical remote confirmed by read-only ls-remote for #1446. Secret-free metadata only; code-gate repo/deploy keys and persistent runtime policy remain approval-gated before dry-run use."
+    },
+    {
+      "projectId": "quillforge",
+      "status": "pending_code_gate_provisioning",
+      "canonicalRemoteUrl": "git@github.com:FuzzySlipper/quillforge.git",
+      "targetRemoteName": "canonical",
+      "defaultBaseBranch": "main",
+      "allowedOperations": [
+        "push_branch"
+      ],
+      "pushBranchPrefixes": [
+        "task/"
+      ],
+      "fastForwardBranches": [
+        "main"
+      ],
+      "codeGateInstance": "den-code-gate",
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/quillforge/quillforge.git",
+      "codeGateRepo": "quillforge/quillforge.git",
+      "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
+      "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
+      "allowedPathPrefixes": [],
+      "dryRunRequires": [
+        "codeGateRemoteUrl",
+        "code-gate repo exists in den-code-gate",
+        "service-side code-gate read route configured in den-publish /config/status",
+        "immutable ingress_ref/head/base metadata from Den submission packet",
+        "matching looks_good Den review round"
+      ],
+      "livePublishRequires": [
+        "all dryRunRequires",
+        "explicit live smoke approval",
+        "explicit redacted credential policy"
+      ],
+      "notes": "Reachable canonical remote confirmed by read-only ls-remote for #1446. Secret-free metadata only; code-gate repo/deploy keys and persistent runtime policy remain approval-gated before dry-run use."
+    },
+    {
+      "projectId": "voxelforge",
+      "status": "pending_code_gate_provisioning",
+      "canonicalRemoteUrl": "git@github.com:FuzzySlipper/voxelforge.git",
+      "targetRemoteName": "canonical",
+      "defaultBaseBranch": "main",
+      "allowedOperations": [
+        "push_branch"
+      ],
+      "pushBranchPrefixes": [
+        "task/"
+      ],
+      "fastForwardBranches": [
+        "main"
+      ],
+      "codeGateInstance": "den-code-gate",
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/voxelforge/voxelforge.git",
+      "codeGateRepo": "voxelforge/voxelforge.git",
+      "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
+      "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
+      "allowedPathPrefixes": [],
+      "dryRunRequires": [
+        "codeGateRemoteUrl",
+        "code-gate repo exists in den-code-gate",
+        "service-side code-gate read route configured in den-publish /config/status",
+        "immutable ingress_ref/head/base metadata from Den submission packet",
+        "matching looks_good Den review round"
+      ],
+      "livePublishRequires": [
+        "all dryRunRequires",
+        "explicit live smoke approval",
+        "explicit redacted credential policy"
+      ],
+      "notes": "Reachable canonical remote confirmed by read-only ls-remote for #1446. Secret-free metadata only; code-gate repo/deploy keys and persistent runtime policy remain approval-gated before dry-run use."
+    }
+  ],
+  "nonPromotionTargets": [
+    {
+      "projectId": "den-desktop",
+      "reason": "Code currently lives inside the den-mcp repo under src/DenMcp.Desktop and related sidecar projects.",
+      "routeThroughProjectId": "den-mcp"
+    },
+    {
+      "projectId": "den-network",
+      "reason": "Infrastructure/documentation space, not a standalone code repository."
+    },
+    {
+      "projectId": "den-gateway",
+      "reason": "Candidate extracted service with no confirmed standalone repo/root in Den yet."
+    },
+    {
+      "projectId": "den-hermes-bridge",
+      "reason": "Candidate bridge workstream with no confirmed standalone repo/root in Den yet."
     }
   ]
 }

@@ -109,6 +109,36 @@ def mcp_tools_payload(has_tool: bool = True) -> dict:
     return {"tools": tools}
 
 
+def test_non_promotion_target_is_not_applicable_without_approval(tmp_path: Path):
+    module = load_module()
+    project_id = "den-desktop"
+    inventory = promotion_inventory()
+    inventory["nonPromotionTargets"] = [
+        {
+            "projectId": project_id,
+            "reason": "Code currently lives inside den-mcp.",
+            "routeThroughProjectId": "den-mcp",
+        }
+    ]
+
+    result = module.evaluate_project(
+        project_id,
+        promotion_inventory=inventory,
+        code_gate_inventory=code_gate_inventory(),
+        status=status_payload(),
+        mcp_tools=mcp_tools_payload(),
+        den_projects={project_id: {"root_path": "/mnt/den-srv/dev/den-mcp"}},
+        run_subchecks=False,
+    )
+
+    assert result["classification"] == "not_applicable"
+    assert result["ready"] is False
+    assert result["requiresApproval"] is False
+    assert result["checks"]["promotion_metadata"]["status"] == "not_applicable"
+    assert result["checks"]["code_gate_inventory"]["status"] == "not_applicable"
+    assert "den-mcp" in " ".join(result["nextActions"])
+
+
 def test_ready_project_outputs_machine_readable_ready_json(tmp_path: Path):
     module = load_module()
     project_id = "den-channels"
