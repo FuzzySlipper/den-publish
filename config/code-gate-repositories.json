@@ -142,6 +142,216 @@
       ],
       "approvalBoundary": "Runtime den-publish.service project policy remains separate (#1443); live publish remains disabled.",
       "serviceReadAccess": "verified_via_project_key"
+    },
+    {
+      "projectId": "den-router",
+      "owner": "den-router",
+      "repo": "den-router",
+      "repoPath": "den-router/den-router.git",
+      "visibility": "private",
+      "defaultBranch": "main",
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/den-router/den-router.git",
+      "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
+      "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
+      "provisioningStatus": "runtime_configured",
+      "accessPolicy": [
+        {
+          "actor": "worker_submitters",
+          "capability": "push",
+          "scope": "code-gate repository only; immutable submissions/* refs; no canonical remote access",
+          "credentialHandling": "agent/operator supplied; never embedded in Den task messages"
+        },
+        {
+          "actor": "reviewers",
+          "capability": "fetch",
+          "scope": "immutable ingress refs for review",
+          "credentialHandling": "read-only code-gate access or service-mediated fetch; never canonical push"
+        },
+        {
+          "actor": "den-publish.service",
+          "capability": "fetch",
+          "scope": "exact immutable ingress refs only",
+          "credentialHandling": "service-side CodeGateGitSshCommand; redacted in /config/status"
+        }
+      ],
+      "serviceReadAccess": "verified_via_project_key",
+      "workerSubmitterAccess": "write_deploy_key_provisioned",
+      "approvalBoundary": "Provisioned under #1465 approval; live publish remains disabled and canonical credentials are not configured."
+    },
+    {
+      "projectId": "discourser-mcp",
+      "owner": "discourser-mcp",
+      "repo": "discourser-mcp",
+      "repoPath": "discourser-mcp/discourser-mcp.git",
+      "visibility": "private",
+      "defaultBranch": "main",
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/discourser-mcp/discourser-mcp.git",
+      "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
+      "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
+      "provisioningStatus": "runtime_configured",
+      "accessPolicy": [
+        {
+          "actor": "worker_submitters",
+          "capability": "push",
+          "scope": "code-gate repository only; immutable submissions/* refs; no canonical remote access",
+          "credentialHandling": "agent/operator supplied; never embedded in Den task messages"
+        },
+        {
+          "actor": "reviewers",
+          "capability": "fetch",
+          "scope": "immutable ingress refs for review",
+          "credentialHandling": "read-only code-gate access or service-mediated fetch; never canonical push"
+        },
+        {
+          "actor": "den-publish.service",
+          "capability": "fetch",
+          "scope": "exact immutable ingress refs only",
+          "credentialHandling": "service-side CodeGateGitSshCommand; redacted in /config/status"
+        }
+      ],
+      "serviceReadAccess": "verified_via_project_key",
+      "workerSubmitterAccess": "write_deploy_key_provisioned",
+      "approvalBoundary": "Provisioned under #1465 approval; live publish remains disabled and canonical credentials are not configured."
+    },
+    {
+      "projectId": "md-post",
+      "owner": "md-post",
+      "repo": "md-post",
+      "repoPath": "md-post/md-post.git",
+      "visibility": "private",
+      "defaultBranch": "master",
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/md-post/md-post.git",
+      "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
+      "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
+      "provisioningStatus": "runtime_configured",
+      "accessPolicy": [
+        {
+          "actor": "worker_submitters",
+          "capability": "push",
+          "scope": "code-gate repository only; immutable submissions/* refs; no canonical remote access",
+          "credentialHandling": "agent/operator supplied; never embedded in Den task messages"
+        },
+        {
+          "actor": "reviewers",
+          "capability": "fetch",
+          "scope": "immutable ingress refs for review",
+          "credentialHandling": "read-only code-gate access or service-mediated fetch; never canonical push"
+        },
+        {
+          "actor": "den-publish.service",
+          "capability": "fetch",
+          "scope": "exact immutable ingress refs only",
+          "credentialHandling": "service-side CodeGateGitSshCommand; redacted in /config/status"
+        }
+      ],
+      "serviceReadAccess": "verified_via_project_key",
+      "workerSubmitterAccess": "write_deploy_key_provisioned",
+      "approvalBoundary": "Provisioned under #1465 approval; live publish remains disabled and canonical credentials are not configured."
+    },
+    {
+      "projectId": "agora-os",
+      "owner": "agora-os",
+      "repo": "agora-os",
+      "repoPath": "agora-os/agora-os.git",
+      "visibility": "private",
+      "defaultBranch": "main",
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/agora-os/agora-os.git",
+      "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
+      "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
+      "provisioningStatus": "runtime_configured",
+      "accessPolicy": [
+        {
+          "actor": "worker_submitters",
+          "capability": "push",
+          "scope": "code-gate repository only; immutable submissions/* refs; no canonical remote access",
+          "credentialHandling": "agent/operator supplied; never embedded in Den task messages"
+        },
+        {
+          "actor": "reviewers",
+          "capability": "fetch",
+          "scope": "immutable ingress refs for review",
+          "credentialHandling": "read-only code-gate access or service-mediated fetch; never canonical push"
+        },
+        {
+          "actor": "den-publish.service",
+          "capability": "fetch",
+          "scope": "exact immutable ingress refs only",
+          "credentialHandling": "service-side CodeGateGitSshCommand; redacted in /config/status"
+        }
+      ],
+      "serviceReadAccess": "verified_via_project_key",
+      "workerSubmitterAccess": "write_deploy_key_provisioned",
+      "approvalBoundary": "Provisioned under #1465 approval; live publish remains disabled and canonical credentials are not configured."
+    },
+    {
+      "projectId": "quillforge",
+      "owner": "quillforge",
+      "repo": "quillforge",
+      "repoPath": "quillforge/quillforge.git",
+      "visibility": "private",
+      "defaultBranch": "main",
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/quillforge/quillforge.git",
+      "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
+      "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
+      "provisioningStatus": "runtime_configured",
+      "accessPolicy": [
+        {
+          "actor": "worker_submitters",
+          "capability": "push",
+          "scope": "code-gate repository only; immutable submissions/* refs; no canonical remote access",
+          "credentialHandling": "agent/operator supplied; never embedded in Den task messages"
+        },
+        {
+          "actor": "reviewers",
+          "capability": "fetch",
+          "scope": "immutable ingress refs for review",
+          "credentialHandling": "read-only code-gate access or service-mediated fetch; never canonical push"
+        },
+        {
+          "actor": "den-publish.service",
+          "capability": "fetch",
+          "scope": "exact immutable ingress refs only",
+          "credentialHandling": "service-side CodeGateGitSshCommand; redacted in /config/status"
+        }
+      ],
+      "serviceReadAccess": "verified_via_project_key",
+      "workerSubmitterAccess": "write_deploy_key_provisioned",
+      "approvalBoundary": "Provisioned under #1465 approval; live publish remains disabled and canonical credentials are not configured."
+    },
+    {
+      "projectId": "voxelforge",
+      "owner": "voxelforge",
+      "repo": "voxelforge",
+      "repoPath": "voxelforge/voxelforge.git",
+      "visibility": "private",
+      "defaultBranch": "main",
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/voxelforge/voxelforge.git",
+      "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
+      "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
+      "provisioningStatus": "runtime_configured",
+      "accessPolicy": [
+        {
+          "actor": "worker_submitters",
+          "capability": "push",
+          "scope": "code-gate repository only; immutable submissions/* refs; no canonical remote access",
+          "credentialHandling": "agent/operator supplied; never embedded in Den task messages"
+        },
+        {
+          "actor": "reviewers",
+          "capability": "fetch",
+          "scope": "immutable ingress refs for review",
+          "credentialHandling": "read-only code-gate access or service-mediated fetch; never canonical push"
+        },
+        {
+          "actor": "den-publish.service",
+          "capability": "fetch",
+          "scope": "exact immutable ingress refs only",
+          "credentialHandling": "service-side CodeGateGitSshCommand; redacted in /config/status"
+        }
+      ],
+      "serviceReadAccess": "verified_via_project_key",
+      "workerSubmitterAccess": "write_deploy_key_provisioned",
+      "approvalBoundary": "Provisioned under #1465 approval; live publish remains disabled and canonical credentials are not configured."
     }
   ]
 }
