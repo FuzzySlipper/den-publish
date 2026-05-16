@@ -51,7 +51,7 @@
       "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/den-core/den-core.git",
       "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
       "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
-      "provisioningStatus": "approval_required",
+      "provisioningStatus": "repo_and_service_read_key_provisioned",
       "accessPolicy": [
         {
           "actor": "worker_submitters",
@@ -72,7 +72,8 @@
           "credentialHandling": "service-side CodeGateGitSshCommand; redacted in /config/status"
         }
       ],
-      "approvalBoundary": "Forgejo repository/deploy-key creation and den-publish service-side read credential configuration require explicit semantic approval; no admin token is stored in this inventory."
+      "approvalBoundary": "Runtime den-publish.service project policy remains separate (#1443); live publish remains disabled.",
+      "serviceReadAccess": "verified_via_project_key"
     },
     {
       "projectId": "den-mcp",
@@ -84,7 +85,7 @@
       "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/den-mcp/den-mcp.git",
       "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
       "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
-      "provisioningStatus": "approval_required",
+      "provisioningStatus": "repo_and_service_read_key_provisioned",
       "accessPolicy": [
         {
           "actor": "worker_submitters",
@@ -105,7 +106,8 @@
           "credentialHandling": "service-side CodeGateGitSshCommand; redacted in /config/status"
         }
       ],
-      "approvalBoundary": "Forgejo repository/deploy-key creation and den-publish service-side read credential configuration require explicit semantic approval; no admin token is stored in this inventory."
+      "approvalBoundary": "Runtime den-publish.service project policy remains separate (#1443); live publish remains disabled.",
+      "serviceReadAccess": "verified_via_project_key"
     },
     {
       "projectId": "den-publish",
@@ -117,7 +119,7 @@
       "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/den-publish/den-publish.git",
       "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
       "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
-      "provisioningStatus": "approval_required",
+      "provisioningStatus": "repo_and_service_read_key_provisioned",
       "accessPolicy": [
         {
           "actor": "worker_submitters",
@@ -138,7 +140,8 @@
           "credentialHandling": "service-side CodeGateGitSshCommand; redacted in /config/status"
         }
       ],
-      "approvalBoundary": "Forgejo repository/deploy-key creation and den-publish service-side read credential configuration require explicit semantic approval; no admin token is stored in this inventory."
+      "approvalBoundary": "Runtime den-publish.service project policy remains separate (#1443); live publish remains disabled.",
+      "serviceReadAccess": "verified_via_project_key"
     }
   ]
 }

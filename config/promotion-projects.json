@@ -46,7 +46,7 @@
     },
     {
       "projectId": "den-publish",
-      "status": "code_gate_inventory_declared",
+      "status": "code_gate_repo_and_read_key_provisioned",
       "canonicalRemoteUrl": "git@github.com:FuzzySlipper/den-publish.git",
       "targetRemoteName": "canonical",
       "defaultBaseBranch": "main",
@@ -77,11 +77,11 @@
         "explicit live smoke approval",
         "explicit redacted credential policy"
       ],
-      "notes": "Local repo currently has no origin remote configured; canonical remote is from service policy/docs and must be reconciled before project-owned dry-runs. Code-gate inventory declared in #1442; Forgejo repo/access creation and runtime service credential remain approval-gated."
+      "notes": "Local repo currently has no origin remote configured; canonical remote is from service policy/docs and must be reconciled before project-owned dry-runs. Code-gate inventory declared in #1442; Forgejo repo/access creation and runtime service credential remain approval-gated. Forgejo org/repo and read-only den-publish.service deploy key were provisioned in #1442; persistent runtime policy remains #1443."
     },
     {
       "projectId": "den-core",
-      "status": "code_gate_inventory_declared",
+      "status": "code_gate_repo_and_read_key_provisioned",
       "canonicalRemoteUrl": "git@github.com:FuzzySlipper/den-core.git",
       "targetRemoteName": "canonical",
       "defaultBaseBranch": "main",
@@ -112,11 +112,11 @@
         "explicit live smoke approval",
         "explicit redacted credential policy"
       ],
-      "notes": "Known canonical repo from /home/dev/den-core origin; code-gate repo/policy still needs provisioning. Code-gate inventory declared in #1442; Forgejo repo/access creation and runtime service credential remain approval-gated."
+      "notes": "Known canonical repo from /home/dev/den-core origin; code-gate repo/policy still needs provisioning. Code-gate inventory declared in #1442; Forgejo repo/access creation and runtime service credential remain approval-gated. Forgejo org/repo and read-only den-publish.service deploy key were provisioned in #1442; persistent runtime policy remains #1443."
     },
     {
       "projectId": "den-mcp",
-      "status": "code_gate_inventory_declared",
+      "status": "code_gate_repo_and_read_key_provisioned",
       "canonicalRemoteUrl": "git@github.com:FuzzySlipper/den-mcp.git",
       "targetRemoteName": "canonical",
       "defaultBaseBranch": "main",
@@ -147,7 +147,7 @@
         "explicit live smoke approval",
         "explicit redacted credential policy"
       ],
-      "notes": "Compatibility facade repo; prepare only if future direct changes need the shared code-gate workflow. Code-gate inventory declared in #1442; Forgejo repo/access creation and runtime service credential remain approval-gated."
+      "notes": "Compatibility facade repo; prepare only if future direct changes need the shared code-gate workflow. Code-gate inventory declared in #1442; Forgejo repo/access creation and runtime service credential remain approval-gated. Forgejo org/repo and read-only den-publish.service deploy key were provisioned in #1442; persistent runtime policy remains #1443."
     }
   ]
 }
