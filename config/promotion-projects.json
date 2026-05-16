@@ -9,9 +9,15 @@
       "canonicalRemoteUrl": "git@github.com:FuzzySlipper/den-channels.git",
       "targetRemoteName": "canonical",
       "defaultBaseBranch": "main",
-      "allowedOperations": ["push_branch"],
-      "pushBranchPrefixes": ["task/"],
-      "fastForwardBranches": ["main"],
+      "allowedOperations": [
+        "push_branch"
+      ],
+      "pushBranchPrefixes": [
+        "task/"
+      ],
+      "fastForwardBranches": [
+        "main"
+      ],
       "codeGateInstance": "den-code-gate",
       "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/den-channels/den-channels.git",
       "codeGateRepo": "den-channels/den-channels.git",
@@ -40,60 +46,108 @@
     },
     {
       "projectId": "den-publish",
-      "status": "metadata_incomplete",
+      "status": "code_gate_inventory_declared",
       "canonicalRemoteUrl": "git@github.com:FuzzySlipper/den-publish.git",
       "targetRemoteName": "canonical",
       "defaultBaseBranch": "main",
-      "allowedOperations": ["push_branch"],
-      "pushBranchPrefixes": ["task/"],
-      "fastForwardBranches": ["main"],
+      "allowedOperations": [
+        "push_branch"
+      ],
+      "pushBranchPrefixes": [
+        "task/"
+      ],
+      "fastForwardBranches": [
+        "main"
+      ],
       "codeGateInstance": "den-code-gate",
-      "codeGateRemoteUrl": null,
-      "codeGateRepo": null,
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/den-publish/den-publish.git",
+      "codeGateRepo": "den-publish/den-publish.git",
       "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
       "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
       "allowedPathPrefixes": [],
-      "dryRunRequires": ["codeGateRemoteUrl", "code-gate read route configured in den-publish /config/status"],
-      "livePublishRequires": ["all dryRunRequires", "explicit live smoke approval", "explicit redacted credential policy"],
-      "notes": "Local repo currently has no origin remote configured; canonical remote is from service policy/docs and must be reconciled before project-owned dry-runs."
+      "dryRunRequires": [
+        "codeGateRemoteUrl",
+        "code-gate repo exists in den-code-gate",
+        "service-side code-gate read route configured in den-publish /config/status",
+        "immutable ingress_ref/head/base metadata from Den submission packet",
+        "matching looks_good Den review round"
+      ],
+      "livePublishRequires": [
+        "all dryRunRequires",
+        "explicit live smoke approval",
+        "explicit redacted credential policy"
+      ],
+      "notes": "Local repo currently has no origin remote configured; canonical remote is from service policy/docs and must be reconciled before project-owned dry-runs. Code-gate inventory declared in #1442; Forgejo repo/access creation and runtime service credential remain approval-gated."
     },
     {
       "projectId": "den-core",
-      "status": "metadata_incomplete",
+      "status": "code_gate_inventory_declared",
       "canonicalRemoteUrl": "git@github.com:FuzzySlipper/den-core.git",
       "targetRemoteName": "canonical",
       "defaultBaseBranch": "main",
-      "allowedOperations": ["push_branch"],
-      "pushBranchPrefixes": ["task/"],
-      "fastForwardBranches": ["main"],
+      "allowedOperations": [
+        "push_branch"
+      ],
+      "pushBranchPrefixes": [
+        "task/"
+      ],
+      "fastForwardBranches": [
+        "main"
+      ],
       "codeGateInstance": "den-code-gate",
-      "codeGateRemoteUrl": null,
-      "codeGateRepo": null,
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/den-core/den-core.git",
+      "codeGateRepo": "den-core/den-core.git",
       "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
       "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
       "allowedPathPrefixes": [],
-      "dryRunRequires": ["codeGateRemoteUrl", "code-gate read route configured in den-publish /config/status"],
-      "livePublishRequires": ["all dryRunRequires", "explicit live smoke approval", "explicit redacted credential policy"],
-      "notes": "Known canonical repo from /home/dev/den-core origin; code-gate repo/policy still needs provisioning."
+      "dryRunRequires": [
+        "codeGateRemoteUrl",
+        "code-gate repo exists in den-code-gate",
+        "service-side code-gate read route configured in den-publish /config/status",
+        "immutable ingress_ref/head/base metadata from Den submission packet",
+        "matching looks_good Den review round"
+      ],
+      "livePublishRequires": [
+        "all dryRunRequires",
+        "explicit live smoke approval",
+        "explicit redacted credential policy"
+      ],
+      "notes": "Known canonical repo from /home/dev/den-core origin; code-gate repo/policy still needs provisioning. Code-gate inventory declared in #1442; Forgejo repo/access creation and runtime service credential remain approval-gated."
     },
     {
       "projectId": "den-mcp",
-      "status": "metadata_incomplete",
+      "status": "code_gate_inventory_declared",
       "canonicalRemoteUrl": "git@github.com:FuzzySlipper/den-mcp.git",
       "targetRemoteName": "canonical",
       "defaultBaseBranch": "main",
-      "allowedOperations": ["push_branch"],
-      "pushBranchPrefixes": ["task/"],
-      "fastForwardBranches": ["main"],
+      "allowedOperations": [
+        "push_branch"
+      ],
+      "pushBranchPrefixes": [
+        "task/"
+      ],
+      "fastForwardBranches": [
+        "main"
+      ],
       "codeGateInstance": "den-code-gate",
-      "codeGateRemoteUrl": null,
-      "codeGateRepo": null,
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/den-mcp/den-mcp.git",
+      "codeGateRepo": "den-mcp/den-mcp.git",
       "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
       "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
       "allowedPathPrefixes": [],
-      "dryRunRequires": ["codeGateRemoteUrl", "code-gate read route configured in den-publish /config/status"],
-      "livePublishRequires": ["all dryRunRequires", "explicit live smoke approval", "explicit redacted credential policy"],
-      "notes": "Compatibility facade repo; prepare only if future direct changes need the shared code-gate workflow."
+      "dryRunRequires": [
+        "codeGateRemoteUrl",
+        "code-gate repo exists in den-code-gate",
+        "service-side code-gate read route configured in den-publish /config/status",
+        "immutable ingress_ref/head/base metadata from Den submission packet",
+        "matching looks_good Den review round"
+      ],
+      "livePublishRequires": [
+        "all dryRunRequires",
+        "explicit live smoke approval",
+        "explicit redacted credential policy"
+      ],
+      "notes": "Compatibility facade repo; prepare only if future direct changes need the shared code-gate workflow. Code-gate inventory declared in #1442; Forgejo repo/access creation and runtime service credential remain approval-gated."
     }
   ]
 }

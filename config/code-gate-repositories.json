@@ -40,6 +40,105 @@
           "credentialHandling": "service-side CodeGateGitSshCommand; redacted in /config/status"
         }
       ]
+    },
+    {
+      "projectId": "den-core",
+      "owner": "den-core",
+      "repo": "den-core",
+      "repoPath": "den-core/den-core.git",
+      "visibility": "private",
+      "defaultBranch": "main",
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/den-core/den-core.git",
+      "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
+      "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
+      "provisioningStatus": "approval_required",
+      "accessPolicy": [
+        {
+          "actor": "worker_submitters",
+          "capability": "push",
+          "scope": "code-gate repository only; immutable submissions/* refs; no canonical remote access",
+          "credentialHandling": "agent/operator supplied; never embedded in Den task messages"
+        },
+        {
+          "actor": "reviewers",
+          "capability": "fetch",
+          "scope": "immutable ingress refs for review",
+          "credentialHandling": "read-only code-gate access or service-mediated fetch; never canonical push"
+        },
+        {
+          "actor": "den-publish.service",
+          "capability": "fetch",
+          "scope": "exact immutable ingress refs only",
+          "credentialHandling": "service-side CodeGateGitSshCommand; redacted in /config/status"
+        }
+      ],
+      "approvalBoundary": "Forgejo repository/deploy-key creation and den-publish service-side read credential configuration require explicit semantic approval; no admin token is stored in this inventory."
+    },
+    {
+      "projectId": "den-mcp",
+      "owner": "den-mcp",
+      "repo": "den-mcp",
+      "repoPath": "den-mcp/den-mcp.git",
+      "visibility": "private",
+      "defaultBranch": "main",
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/den-mcp/den-mcp.git",
+      "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
+      "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
+      "provisioningStatus": "approval_required",
+      "accessPolicy": [
+        {
+          "actor": "worker_submitters",
+          "capability": "push",
+          "scope": "code-gate repository only; immutable submissions/* refs; no canonical remote access",
+          "credentialHandling": "agent/operator supplied; never embedded in Den task messages"
+        },
+        {
+          "actor": "reviewers",
+          "capability": "fetch",
+          "scope": "immutable ingress refs for review",
+          "credentialHandling": "read-only code-gate access or service-mediated fetch; never canonical push"
+        },
+        {
+          "actor": "den-publish.service",
+          "capability": "fetch",
+          "scope": "exact immutable ingress refs only",
+          "credentialHandling": "service-side CodeGateGitSshCommand; redacted in /config/status"
+        }
+      ],
+      "approvalBoundary": "Forgejo repository/deploy-key creation and den-publish service-side read credential configuration require explicit semantic approval; no admin token is stored in this inventory."
+    },
+    {
+      "projectId": "den-publish",
+      "owner": "den-publish",
+      "repo": "den-publish",
+      "repoPath": "den-publish/den-publish.git",
+      "visibility": "private",
+      "defaultBranch": "main",
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/den-publish/den-publish.git",
+      "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
+      "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
+      "provisioningStatus": "approval_required",
+      "accessPolicy": [
+        {
+          "actor": "worker_submitters",
+          "capability": "push",
+          "scope": "code-gate repository only; immutable submissions/* refs; no canonical remote access",
+          "credentialHandling": "agent/operator supplied; never embedded in Den task messages"
+        },
+        {
+          "actor": "reviewers",
+          "capability": "fetch",
+          "scope": "immutable ingress refs for review",
+          "credentialHandling": "read-only code-gate access or service-mediated fetch; never canonical push"
+        },
+        {
+          "actor": "den-publish.service",
+          "capability": "fetch",
+          "scope": "exact immutable ingress refs only",
+          "credentialHandling": "service-side CodeGateGitSshCommand; redacted in /config/status"
+        }
+      ],
+      "approvalBoundary": "Forgejo repository/deploy-key creation and den-publish service-side read credential configuration require explicit semantic approval; no admin token is stored in this inventory."
     }
   ]
 }
