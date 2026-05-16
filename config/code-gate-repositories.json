@@ -352,6 +352,38 @@
       "serviceReadAccess": "verified_via_project_key",
       "workerSubmitterAccess": "write_deploy_key_provisioned",
       "approvalBoundary": "Provisioned under #1465 approval; live publish remains disabled and canonical credentials are not configured."
+    },
+    {
+      "projectId": "den-hermes-bridge",
+      "owner": "den-hermes-bridge",
+      "repo": "den-hermes",
+      "repoPath": "den-hermes-bridge/den-hermes.git",
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/den-hermes-bridge/den-hermes.git",
+      "defaultBranch": "main",
+      "visibility": "private",
+      "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
+      "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
+      "accessPolicy": [
+        {
+          "actor": "worker submitters",
+          "capability": "push",
+          "scope": "submission refs only; code-gate repo only; no canonical credentials"
+        },
+        {
+          "actor": "reviewers",
+          "capability": "fetch",
+          "scope": "immutable ingress refs only"
+        },
+        {
+          "actor": "den-publish.service",
+          "capability": "fetch",
+          "scope": "exact immutable ingress refs only",
+          "credentialHandling": "service-side CodeGateGitSshCommand; redacted in /config/status"
+        }
+      ],
+      "serviceReadAccess": "verified_via_project_key",
+      "workerSubmitterAccess": "write_deploy_key_provisioned",
+      "approvalBoundary": "Provisioned under sysadmin option-2 migration; live publish remains separate approval."
     }
   ]
 }

@@ -358,6 +358,41 @@
         "explicit redacted credential policy"
       ],
       "notes": "Code-gate repo, worker submitter key, service read key, and persistent den-publish runtime policy were provisioned under #1465. Live publish remains disabled; actual validate-only proof still requires a project-local reviewed immutable submission."
+    },
+    {
+      "projectId": "den-hermes-bridge",
+      "status": "dry_run_ready",
+      "canonicalRemoteUrl": "git@github.com:FuzzySlipper/den-hermes.git",
+      "targetRemoteName": "canonical",
+      "defaultBaseBranch": "main",
+      "allowedOperations": [
+        "push_branch"
+      ],
+      "pushBranchPrefixes": [
+        "task/"
+      ],
+      "fastForwardBranches": [
+        "main"
+      ],
+      "codeGateInstance": "den-code-gate",
+      "codeGateRemoteUrl": "ssh://git@192.168.1.10:3022/den-hermes-bridge/den-hermes.git",
+      "codeGateRepo": "den-hermes-bridge/den-hermes.git",
+      "immutableRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/runs/{run_id}/attempt-{attempt_ordinal}",
+      "convenienceRefPattern": "refs/heads/submissions/{project_id}/tasks/{task_id}/current",
+      "allowedPathPrefixes": [],
+      "dryRunRequires": [
+        "codeGateRemoteUrl",
+        "code-gate repo exists in den-code-gate",
+        "service-side code-gate read route configured in den-publish /config/status",
+        "immutable ingress_ref/head/base metadata from Den submission packet",
+        "matching looks_good Den review round"
+      ],
+      "livePublishRequires": [
+        "all dryRunRequires",
+        "explicit live approval",
+        "explicit redacted credential policy"
+      ],
+      "notes": "Onboarded under sysadmin option-2 migration from old Trusted Publisher root_path flow; code-gate repo, worker submitter key, service read key, and persistent den-publish runtime policy provisioned. Live publish must still be separately approved."
     }
   ],
   "nonPromotionTargets": [
@@ -373,10 +408,6 @@
     {
       "projectId": "den-gateway",
       "reason": "Candidate extracted service with no confirmed standalone repo/root in Den yet."
-    },
-    {
-      "projectId": "den-hermes-bridge",
-      "reason": "Candidate bridge workstream with no confirmed standalone repo/root in Den yet."
     }
   ]
 }
