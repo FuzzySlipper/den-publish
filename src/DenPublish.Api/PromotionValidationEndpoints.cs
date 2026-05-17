@@ -6,35 +6,43 @@ public static class PromotionValidationEndpoints
 {
     public static IEndpointRouteBuilder MapPromotionValidationEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/promotion/validate", static (PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow, IWorkspacePathResolver workspacePathResolver) =>
+        app.MapPost("/promotion/validate", static (PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow, IWorkspacePathResolver workspacePathResolver, IPromotionPolicyContextResolver policyContextResolver) =>
         {
-            var response = Validate(request, workflow, workspacePathResolver);
+            var response = Validate(request, workflow, workspacePathResolver, policyContextResolver);
             return response.IsPublishable ? Results.Ok(response) : Results.BadRequest(response);
         });
-        app.MapPost("/promotion/dry-run", static (PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow, IPromotionPublisher publisher, IWorkspacePathResolver workspacePathResolver) =>
+        app.MapPost("/promotion/dry-run", static (PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow, IPromotionPublisher publisher, IWorkspacePathResolver workspacePathResolver, IPromotionPolicyContextResolver policyContextResolver) =>
         {
-            var response = ValidateAndDryRun(request, workflow, publisher, workspacePathResolver);
+            var response = ValidateAndDryRun(request, workflow, publisher, workspacePathResolver, policyContextResolver);
             return response.Succeeded ? Results.Ok(response) : Results.BadRequest(response);
         });
-        app.MapPost("/promotion/publish", static (PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow, ILivePromotionPublisher publisher, IWorkspacePathResolver workspacePathResolver) =>
+        app.MapPost("/promotion/publish", static (PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow, ILivePromotionPublisher publisher, IWorkspacePathResolver workspacePathResolver, IPromotionPolicyContextResolver policyContextResolver) =>
         {
-            var response = ValidateAndPublish(request, workflow, publisher, workspacePathResolver);
+            var response = ValidateAndPublish(request, workflow, publisher, workspacePathResolver, policyContextResolver);
             return response.Succeeded ? Results.Ok(response) : Results.BadRequest(response);
         });
         return app;
     }
 
     public static PromotionValidationApiResponse Validate(PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow)
-        => Validate(request, workflow, RequestWorkspacePathResolver.Instance);
+        => Validate(request, workflow, RequestWorkspacePathResolver.Instance, DefaultPromotionPolicyContextResolver.Instance);
 
     public static PromotionValidationApiResponse Validate(
         PromotionValidationApiRequest request,
         IPromotionValidationWorkflow workflow,
         IWorkspacePathResolver workspacePathResolver)
+        => Validate(request, workflow, workspacePathResolver, DefaultPromotionPolicyContextResolver.Instance);
+
+    public static PromotionValidationApiResponse Validate(
+        PromotionValidationApiRequest request,
+        IPromotionValidationWorkflow workflow,
+        IWorkspacePathResolver workspacePathResolver,
+        IPromotionPolicyContextResolver policyContextResolver)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(workflow);
         ArgumentNullException.ThrowIfNull(workspacePathResolver);
+        ArgumentNullException.ThrowIfNull(policyContextResolver);
 
         var workspacePath = workspacePathResolver.Resolve(request);
         if (!workspacePath.Succeeded)
@@ -42,7 +50,7 @@ public static class PromotionValidationEndpoints
             return PromotionValidationApiResponse.FromResult(MalformedRequestResult(workspacePath.Failure!));
         }
 
-        if (!TryMapRequest(request, workspacePath.WorkspacePath!, out var domainRequest, out var failure))
+        if (!TryMapRequest(request, workspacePath.WorkspacePath!, policyContextResolver.Resolve(request), out var domainRequest, out var failure))
         {
             return PromotionValidationApiResponse.FromResult(MalformedRequestResult(failure!));
         }
@@ -55,18 +63,27 @@ public static class PromotionValidationEndpoints
         PromotionValidationApiRequest request,
         IPromotionValidationWorkflow workflow,
         IPromotionPublisher publisher)
-        => ValidateAndDryRun(request, workflow, publisher, RequestWorkspacePathResolver.Instance);
+        => ValidateAndDryRun(request, workflow, publisher, RequestWorkspacePathResolver.Instance, DefaultPromotionPolicyContextResolver.Instance);
 
     public static PromotionDryRunApiResponse ValidateAndDryRun(
         PromotionValidationApiRequest request,
         IPromotionValidationWorkflow workflow,
         IPromotionPublisher publisher,
         IWorkspacePathResolver workspacePathResolver)
+        => ValidateAndDryRun(request, workflow, publisher, workspacePathResolver, DefaultPromotionPolicyContextResolver.Instance);
+
+    public static PromotionDryRunApiResponse ValidateAndDryRun(
+        PromotionValidationApiRequest request,
+        IPromotionValidationWorkflow workflow,
+        IPromotionPublisher publisher,
+        IWorkspacePathResolver workspacePathResolver,
+        IPromotionPolicyContextResolver policyContextResolver)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(workflow);
         ArgumentNullException.ThrowIfNull(publisher);
         ArgumentNullException.ThrowIfNull(workspacePathResolver);
+        ArgumentNullException.ThrowIfNull(policyContextResolver);
 
         if (!request.Decision.ValidateOnly)
         {
@@ -83,7 +100,7 @@ public static class PromotionValidationEndpoints
             return PromotionDryRunApiResponse.FromValidationOnly(malformed);
         }
 
-        if (!TryMapRequest(request, workspacePath.WorkspacePath!, out var domainRequest, out var failure))
+        if (!TryMapRequest(request, workspacePath.WorkspacePath!, policyContextResolver.Resolve(request), out var domainRequest, out var failure))
         {
             var malformed = MalformedRequestResult(failure!);
             return PromotionDryRunApiResponse.FromValidationOnly(malformed);
@@ -106,18 +123,27 @@ public static class PromotionValidationEndpoints
         PromotionValidationApiRequest request,
         IPromotionValidationWorkflow workflow,
         ILivePromotionPublisher publisher)
-        => ValidateAndPublish(request, workflow, publisher, RequestWorkspacePathResolver.Instance);
+        => ValidateAndPublish(request, workflow, publisher, RequestWorkspacePathResolver.Instance, DefaultPromotionPolicyContextResolver.Instance);
 
     public static PromotionDryRunApiResponse ValidateAndPublish(
         PromotionValidationApiRequest request,
         IPromotionValidationWorkflow workflow,
         ILivePromotionPublisher publisher,
         IWorkspacePathResolver workspacePathResolver)
+        => ValidateAndPublish(request, workflow, publisher, workspacePathResolver, DefaultPromotionPolicyContextResolver.Instance);
+
+    public static PromotionDryRunApiResponse ValidateAndPublish(
+        PromotionValidationApiRequest request,
+        IPromotionValidationWorkflow workflow,
+        ILivePromotionPublisher publisher,
+        IWorkspacePathResolver workspacePathResolver,
+        IPromotionPolicyContextResolver policyContextResolver)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(workflow);
         ArgumentNullException.ThrowIfNull(publisher);
         ArgumentNullException.ThrowIfNull(workspacePathResolver);
+        ArgumentNullException.ThrowIfNull(policyContextResolver);
 
         if (request.Decision.ValidateOnly)
         {
@@ -142,7 +168,7 @@ public static class PromotionValidationEndpoints
             return PromotionDryRunApiResponse.FromValidationOnly(malformed);
         }
 
-        if (!TryMapRequest(request, workspacePath.WorkspacePath!, out var domainRequest, out var failure))
+        if (!TryMapRequest(request, workspacePath.WorkspacePath!, policyContextResolver.Resolve(request), out var domainRequest, out var failure))
         {
             var malformed = MalformedRequestResult(failure!);
             return PromotionDryRunApiResponse.FromValidationOnly(malformed);
@@ -180,6 +206,7 @@ public static class PromotionValidationEndpoints
     private static bool TryMapRequest(
         PromotionValidationApiRequest request,
         string workspacePath,
+        PromotionPolicyContext policyContext,
         out PromotionValidationRequest? domainRequest,
         out ValidationFailure? failure)
     {
@@ -215,7 +242,13 @@ public static class PromotionValidationEndpoints
             CreatedAt: request.Decision.CreatedAt,
             ScopeOverrides: request.Decision.ScopeOverrides
                 .Select(scopeOverride => new PublishScopeOverride(scopeOverride.OverrideId, scopeOverride.Reason, scopeOverride.ApprovedBy))
-                .ToArray());
+                .ToArray(),
+            OrchestratorOverride: request.Decision.OrchestratorOverride is null
+                ? null
+                : new PublishOrchestratorOverride(
+                    request.Decision.OrchestratorOverride.UnclassifiedFailurePolicy,
+                    request.Decision.OrchestratorOverride.Reason,
+                    request.Decision.OrchestratorOverride.ExpectedRiskCategories));
 
         CodeSubmission? submission = null;
         if (request.Submission is not null)
@@ -230,7 +263,8 @@ public static class PromotionValidationEndpoints
             decision,
             submission,
             workspacePath,
-            new ChangedFileScopePolicy(request.AllowedPathPrefixes));
+            new ChangedFileScopePolicy(request.AllowedPathPrefixes),
+            policyContext);
         return true;
     }
 
@@ -384,10 +418,16 @@ public sealed record PublishDecisionApiModel(
     IReadOnlyList<string> ScopeOverrideIds,
     bool ValidateOnly,
     DateTimeOffset CreatedAt,
-    IReadOnlyList<PublishScopeOverrideApiModel>? ScopeOverrides = null)
+    IReadOnlyList<PublishScopeOverrideApiModel>? ScopeOverrides = null,
+    PublishOrchestratorOverrideApiModel? OrchestratorOverride = null)
 {
     public IReadOnlyList<PublishScopeOverrideApiModel> ScopeOverrides { get; init; } = ScopeOverrides ?? [];
 }
+
+public sealed record PublishOrchestratorOverrideApiModel(
+    string UnclassifiedFailurePolicy,
+    string Reason,
+    IReadOnlyList<string> ExpectedRiskCategories);
 
 public sealed record PublishScopeOverrideApiModel(
     string OverrideId,
@@ -437,8 +477,11 @@ public sealed record PromotionValidationApiResponse(
     IReadOnlyList<string> Decisions,
     IReadOnlyList<PromotionValidationFailureApiModel> Failures,
     string? LocalRef,
-    string? FetchedHeadCommit)
+    string? FetchedHeadCommit,
+    IReadOnlyList<PromotionValidationWarningApiModel>? Warnings = null)
 {
+    public IReadOnlyList<PromotionValidationWarningApiModel> Warnings { get; init; } = Warnings ?? [];
+
     public static PromotionValidationApiResponse FromResult(PromotionValidationWorkflowResult result)
         => new(
             IsPublishable: result.IsPublishable,
@@ -449,7 +492,10 @@ public sealed record PromotionValidationApiResponse(
                 .Select(failure => new PromotionValidationFailureApiModel(ToApiString(failure.Code), failure.Message))
                 .ToArray(),
             LocalRef: result.LocalRef,
-            FetchedHeadCommit: result.FetchedHeadCommit?.Value);
+            FetchedHeadCommit: result.FetchedHeadCommit?.Value,
+            Warnings: result.Validation.Warnings
+                .Select(warning => new PromotionValidationWarningApiModel(ToApiString(warning.Code), warning.Message, warning.Reason))
+                .ToArray());
 
     public static string ToApiString(PublishValidationStatus status)
         => status switch
@@ -478,11 +524,14 @@ public sealed record PromotionValidationApiResponse(
             PublishFailureCode.CredentialUnavailable => "credential_unavailable",
             PublishFailureCode.GitPushFailed => "git_push_failed",
             PublishFailureCode.AuditFailed => "audit_failed",
+            PublishFailureCode.UnclassifiedSoftFailure => "unclassified_soft_failure",
             _ => code.ToString().ToLowerInvariant()
         };
 }
 
 public sealed record PromotionValidationFailureApiModel(string Code, string Message);
+
+public sealed record PromotionValidationWarningApiModel(string Code, string Message, string Reason);
 
 public sealed record PromotionDryRunApiResponse(
     bool Succeeded,

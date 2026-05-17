@@ -97,6 +97,108 @@ public sealed class PromotionValidationWorkflowTests
         Assert.Null(ancestry.CapturedSubmission);
     }
 
+    [Fact]
+    public void Validate_DowngradesScopeViolationToWarningForTrustedOrchestratorAuditWarn()
+    {
+        var ancestry = new RecordingAncestryValidator(PublishValidationResult.Approved("ancestry ok", ["ancestry passed"]));
+        var submission = ApprovedSubmission();
+        var workflow = new PromotionValidationWorkflow(
+            new RecordingPublishEngine(PublishValidationResult.Approved("preflight ok", ["preflight passed"])),
+            new RecordingSubmissionFetcher(SubmissionFetchResult.Fetched(
+                "refs/den-publish/submissions/sub_1424_001",
+                submission.HeadCommit)),
+            new RecordingScopeValidator(PublishValidationResult.Rejected(
+                "scope rejected",
+                new ValidationFailure(PublishFailureCode.ScopeViolation, "observed file is outside claimed scope"))),
+            ancestry);
+        var policy = new PromotionPolicyContext(PromotionCallerTrust.TrustedOrchestrator, PromotionPolicyMode.AuditWarn);
+
+        var result = workflow.Validate(new PromotionValidationRequest(Decision(), submission, "/workspace", Policy(), policy));
+
+        Assert.True(result.IsPublishable);
+        Assert.Equal("refs/den-publish/submissions/sub_1424_001", ancestry.CapturedLocalRef);
+        var warning = Assert.Single(result.Validation.Warnings);
+        Assert.Equal(PublishFailureCode.ScopeViolation, warning.Code);
+        Assert.Contains("observed file is outside claimed scope", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("audit_warn downgraded scope_violation", result.Validation.Decisions);
+    }
+
+    [Fact]
+    public void Validate_DoesNotDowngradeScopeViolationForWorkerAuditWarn()
+    {
+        var ancestry = new RecordingAncestryValidator(PublishValidationResult.Approved("ancestry ok"));
+        var workflow = new PromotionValidationWorkflow(
+            new RecordingPublishEngine(PublishValidationResult.Approved("preflight ok", ["preflight passed"])),
+            new RecordingSubmissionFetcher(SubmissionFetchResult.Fetched(
+                "refs/den-publish/submissions/sub_1424_001",
+                Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))),
+            new RecordingScopeValidator(PublishValidationResult.Rejected(
+                "scope rejected",
+                new ValidationFailure(PublishFailureCode.ScopeViolation, "outside scope"))),
+            ancestry);
+        var policy = new PromotionPolicyContext(PromotionCallerTrust.Worker, PromotionPolicyMode.AuditWarn);
+
+        var result = workflow.Validate(new PromotionValidationRequest(Decision(), ApprovedSubmission(), "/workspace", Policy(), policy));
+
+        Assert.False(result.IsPublishable);
+        Assert.Equal(PublishFailureCode.ScopeViolation, Assert.Single(result.Validation.Failures).Code);
+        Assert.Null(ancestry.CapturedSubmission);
+    }
+
+    [Fact]
+    public void Validate_DowngradesUnclassifiedSoftFailureOnlyWithOrchestratorOverride()
+    {
+        var ancestry = new RecordingAncestryValidator(PublishValidationResult.Approved("ancestry ok", ["ancestry passed"]));
+        var workflow = new PromotionValidationWorkflow(
+            new RecordingPublishEngine(PublishValidationResult.Approved("preflight ok", ["preflight passed"])),
+            new RecordingSubmissionFetcher(SubmissionFetchResult.Fetched(
+                "refs/den-publish/submissions/sub_1424_001",
+                Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))),
+            new RecordingScopeValidator(PublishValidationResult.Rejected(
+                "unclassified environment failure",
+                new ValidationFailure(PublishFailureCode.UnclassifiedSoftFailure, "SSH config permission issue after hard proof passed"))),
+            ancestry);
+        var decision = Decision(orchestratorOverride: new PublishOrchestratorOverride(
+            UnclassifiedFailurePolicy: "warn_and_audit",
+            Reason: "SSH config permission issue is environmental, not a code problem",
+            ExpectedRiskCategories: ["infra_papercut", "non_code"]));
+        var policy = new PromotionPolicyContext(PromotionCallerTrust.TrustedOrchestrator, PromotionPolicyMode.AuditWarn);
+
+        var result = workflow.Validate(new PromotionValidationRequest(decision, ApprovedSubmission(), "/workspace", Policy(), policy));
+
+        Assert.True(result.IsPublishable);
+        var warning = Assert.Single(result.Validation.Warnings);
+        Assert.Equal(PublishFailureCode.UnclassifiedSoftFailure, warning.Code);
+        Assert.Contains("SSH config permission issue", warning.Message, StringComparison.Ordinal);
+        Assert.Contains("audit_warn downgraded unclassified_soft_failure", result.Validation.Decisions);
+    }
+
+    [Fact]
+    public void Validate_DoesNotDowngradeUnclassifiedSoftFailureWithoutOverrideReason()
+    {
+        var ancestry = new RecordingAncestryValidator(PublishValidationResult.Approved("ancestry ok"));
+        var workflow = new PromotionValidationWorkflow(
+            new RecordingPublishEngine(PublishValidationResult.Approved("preflight ok", ["preflight passed"])),
+            new RecordingSubmissionFetcher(SubmissionFetchResult.Fetched(
+                "refs/den-publish/submissions/sub_1424_001",
+                Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))),
+            new RecordingScopeValidator(PublishValidationResult.Rejected(
+                "unclassified environment failure",
+                new ValidationFailure(PublishFailureCode.UnclassifiedSoftFailure, "SSH config permission issue"))),
+            ancestry);
+        var decision = Decision(orchestratorOverride: new PublishOrchestratorOverride(
+            UnclassifiedFailurePolicy: "warn_and_audit",
+            Reason: "",
+            ExpectedRiskCategories: ["infra_papercut"]));
+        var policy = new PromotionPolicyContext(PromotionCallerTrust.TrustedOrchestrator, PromotionPolicyMode.AuditWarn);
+
+        var result = workflow.Validate(new PromotionValidationRequest(decision, ApprovedSubmission(), "/workspace", Policy(), policy));
+
+        Assert.False(result.IsPublishable);
+        Assert.Equal(PublishFailureCode.UnclassifiedSoftFailure, Assert.Single(result.Validation.Failures).Code);
+        Assert.Null(ancestry.CapturedSubmission);
+    }
+
     private sealed class RecordingPublishEngine(PublishValidationResult result) : IPublishEngine
     {
         public PublishDecision? CapturedDecision { get; private set; }
@@ -158,7 +260,7 @@ public sealed class PromotionValidationWorkflowTests
     private static ChangedFileScopePolicy Policy()
         => new(AllowedPathPrefixes: ["src/DenChannels/"]);
 
-    private static PublishDecision Decision()
+    private static PublishDecision Decision(PublishOrchestratorOverride? orchestratorOverride = null)
         => new(
             DecisionId: "pub_1424_001",
             ProjectId: "den-channels",
@@ -173,7 +275,9 @@ public sealed class PromotionValidationWorkflowTests
             ReviewRoundId: 680,
             ScopeOverrideIds: [],
             ValidateOnly: true,
-            CreatedAt: DateTimeOffset.Parse("2026-05-14T20:05:00Z"));
+            CreatedAt: DateTimeOffset.Parse("2026-05-14T20:05:00Z"),
+            ScopeOverrides: [],
+            OrchestratorOverride: orchestratorOverride);
 
     private static CodeSubmission ApprovedSubmission()
         => new(

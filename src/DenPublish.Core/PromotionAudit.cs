@@ -38,6 +38,20 @@ public sealed record PromotionAuditScopeOverride(
     string Reason,
     string ApprovedBy);
 
+public sealed record PromotionAuditWarning(
+    PublishFailureCode Code,
+    string Message,
+    string Reason);
+
+public sealed record PromotionAuditOrchestratorOverride(
+    string UnclassifiedFailurePolicy,
+    string Reason,
+    IReadOnlyList<string> ExpectedRiskCategories);
+
+public sealed record PromotionAuditPolicyContext(
+    PromotionCallerTrust CallerTrust,
+    PromotionPolicyMode Mode);
+
 public sealed record PromotionAuditRecord(
     DateTimeOffset RecordedAt,
     string DecisionId,
@@ -50,7 +64,25 @@ public sealed record PromotionAuditRecord(
     IReadOnlyList<ValidationFailure> Failures,
     string? LocalRef,
     GitSha? FetchedHeadCommit,
-    IReadOnlyList<PromotionAuditScopeOverride> ScopeOverrides = null!);
+    IReadOnlyList<PromotionAuditScopeOverride>? ScopeOverrides = null,
+    IReadOnlyList<PromotionAuditWarning>? Warnings = null,
+    PromotionAuditOrchestratorOverride? OrchestratorOverride = null,
+    PromotionAuditPolicyContext? PolicyContext = null,
+    string? RequestedBy = null,
+    PublishOperation? Operation = null,
+    string? TargetRemote = null,
+    string? TargetBranch = null,
+    bool? ValidateOnly = null,
+    int? ReviewRoundId = null,
+    string? ExpectedBaseBranch = null,
+    IReadOnlyList<string>? ScopeOverrideIds = null)
+{
+    public IReadOnlyList<PromotionAuditScopeOverride> ScopeOverrides { get; init; } = ScopeOverrides ?? [];
+
+    public IReadOnlyList<PromotionAuditWarning> Warnings { get; init; } = Warnings ?? [];
+
+    public IReadOnlyList<string> ScopeOverrideIds { get; init; } = ScopeOverrideIds ?? [];
+}
 
 public sealed class AuditedPromotionValidationWorkflow(
     IPromotionValidationWorkflow inner,
@@ -127,6 +159,61 @@ public sealed class AuditedPromotionValidationWorkflow(
             conflicts.Add("expected head commit");
         }
 
+        if (record.RequestedBy is not null && !string.Equals(record.RequestedBy, request.Decision.RequestedBy, StringComparison.Ordinal))
+        {
+            conflicts.Add("requested by");
+        }
+
+        if (record.Operation is not null && record.Operation != request.Decision.Operation)
+        {
+            conflicts.Add("operation");
+        }
+
+        if (record.TargetRemote is not null && !string.Equals(record.TargetRemote, request.Decision.TargetRemote, StringComparison.Ordinal))
+        {
+            conflicts.Add("target remote");
+        }
+
+        if (record.TargetBranch is not null && !string.Equals(record.TargetBranch, request.Decision.TargetBranch, StringComparison.Ordinal))
+        {
+            conflicts.Add("target branch");
+        }
+
+        if (record.ValidateOnly is not null && record.ValidateOnly != request.Decision.ValidateOnly)
+        {
+            conflicts.Add("validate only");
+        }
+
+        if (!PolicyContextMatches(record.PolicyContext, request.EffectivePolicyContext))
+        {
+            conflicts.Add("policy context");
+        }
+
+        if (!OrchestratorOverrideMatches(record.OrchestratorOverride, request.Decision.OrchestratorOverride))
+        {
+            conflicts.Add("orchestrator override");
+        }
+
+        if (record.ReviewRoundId is not null && record.ReviewRoundId != request.Decision.ReviewRoundId)
+        {
+            conflicts.Add("review round id");
+        }
+
+        if (record.ExpectedBaseBranch is not null && !string.Equals(record.ExpectedBaseBranch, request.Decision.ExpectedBaseBranch, StringComparison.Ordinal))
+        {
+            conflicts.Add("expected base branch");
+        }
+
+        if (!record.ScopeOverrideIds.SequenceEqual(request.Decision.ScopeOverrideIds, StringComparer.Ordinal))
+        {
+            conflicts.Add("scope override ids");
+        }
+
+        if (!ScopeOverridesMatch(record.ScopeOverrides, CollectUsedScopeOverrides(request)))
+        {
+            conflicts.Add("scope overrides");
+        }
+
         if (conflicts.Count > 0)
         {
             return new PromotionValidationWorkflowResult(
@@ -140,7 +227,9 @@ public sealed class AuditedPromotionValidationWorkflow(
         }
 
         return new PromotionValidationWorkflowResult(
-            new PublishValidationResult(record.Status, $"replayed audited result: {record.Summary}", record.Decisions, record.Failures),
+            new PublishValidationResult(record.Status, $"replayed audited result: {record.Summary}", record.Decisions, record.Failures, record.Warnings
+                .Select(warning => new ValidationWarning(warning.Code, warning.Message, warning.Reason))
+                .ToArray()),
             record.LocalRef,
             record.FetchedHeadCommit);
     }
@@ -155,13 +244,68 @@ public sealed class AuditedPromotionValidationWorkflow(
             ProjectId: request.Decision.ProjectId,
             TaskId: request.Decision.TaskId,
             SubmissionId: request.Decision.SubmissionId,
+            RequestedBy: request.Decision.RequestedBy,
+            Operation: request.Decision.Operation,
+            TargetRemote: request.Decision.TargetRemote,
+            TargetBranch: request.Decision.TargetBranch,
+            ValidateOnly: request.Decision.ValidateOnly,
+            ReviewRoundId: request.Decision.ReviewRoundId,
+            ExpectedBaseBranch: request.Decision.ExpectedBaseBranch,
+            ScopeOverrideIds: request.Decision.ScopeOverrideIds,
             Status: result.Validation.Status,
             Summary: result.Validation.Summary,
             Decisions: result.Validation.Decisions,
             Failures: result.Validation.Failures,
             LocalRef: result.LocalRef,
             FetchedHeadCommit: result.FetchedHeadCommit,
-            ScopeOverrides: CollectUsedScopeOverrides(request));
+            ScopeOverrides: CollectUsedScopeOverrides(request),
+            Warnings: result.Validation.Warnings
+                .Select(warning => new PromotionAuditWarning(warning.Code, warning.Message, warning.Reason))
+                .ToArray(),
+            OrchestratorOverride: request.Decision.OrchestratorOverride is null
+                ? null
+                : new PromotionAuditOrchestratorOverride(
+                    request.Decision.OrchestratorOverride.UnclassifiedFailurePolicy,
+                    request.Decision.OrchestratorOverride.Reason,
+                    request.Decision.OrchestratorOverride.ExpectedRiskCategories),
+            PolicyContext: new PromotionAuditPolicyContext(
+                request.EffectivePolicyContext.CallerTrust,
+                request.EffectivePolicyContext.Mode));
+
+    private static bool PolicyContextMatches(PromotionAuditPolicyContext? recorded, PromotionPolicyContext current)
+    {
+        var recordedContext = recorded ?? new PromotionAuditPolicyContext(PromotionCallerTrust.Worker, PromotionPolicyMode.Strict);
+        return recordedContext.CallerTrust == current.CallerTrust
+            && recordedContext.Mode == current.Mode;
+    }
+
+    private static bool OrchestratorOverrideMatches(PromotionAuditOrchestratorOverride? recorded, PublishOrchestratorOverride? current)
+    {
+        if (recorded is null || current is null)
+        {
+            return recorded is null && current is null;
+        }
+
+        return string.Equals(recorded.UnclassifiedFailurePolicy, current.UnclassifiedFailurePolicy, StringComparison.Ordinal)
+            && string.Equals(recorded.Reason, current.Reason, StringComparison.Ordinal)
+            && recorded.ExpectedRiskCategories.SequenceEqual(current.ExpectedRiskCategories, StringComparer.Ordinal);
+    }
+
+    private static bool ScopeOverridesMatch(
+        IReadOnlyList<PromotionAuditScopeOverride> recorded,
+        IReadOnlyList<PromotionAuditScopeOverride> current)
+    {
+        if (recorded.Count != current.Count)
+        {
+            return false;
+        }
+
+        return recorded.Zip(current).All(pair =>
+            string.Equals(pair.First.OverrideId, pair.Second.OverrideId, StringComparison.Ordinal)
+            && string.Equals(pair.First.FindingId, pair.Second.FindingId, StringComparison.Ordinal)
+            && string.Equals(pair.First.Reason, pair.Second.Reason, StringComparison.Ordinal)
+            && string.Equals(pair.First.ApprovedBy, pair.Second.ApprovedBy, StringComparison.Ordinal));
+    }
 
     private static IReadOnlyList<PromotionAuditScopeOverride> CollectUsedScopeOverrides(PromotionValidationRequest request)
     {

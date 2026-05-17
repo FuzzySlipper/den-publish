@@ -24,6 +24,7 @@ public static class DenPublishValidationServiceCollectionExtensions
         services.AddSingleton<IPromotionPublisher, DryRunPromotionPublisher>();
         services.AddSingleton<ILivePromotionPublisher>(provider => ReadLivePromotionPublisher(configuration, provider.GetRequiredService<IGitCommandRunner>()));
         services.AddSingleton<IWorkspacePathResolver>(_ => ReadWorkspacePathResolver(configuration));
+        services.AddSingleton<IPromotionPolicyContextResolver>(_ => ReadPromotionPolicyContextResolver(configuration));
         services.AddSingleton<IDenPublishRuntimeConfigurationStatusProvider>(_ => new DenPublishRuntimeConfigurationStatusProvider(configuration));
 
         services.AddSingleton<IPromotionAuditStore>(_ => new FilePromotionAuditStore(ReadAuditFilePath(configuration)));
@@ -144,6 +145,31 @@ public static class DenPublishValidationServiceCollectionExtensions
             ? RequestWorkspacePathResolver.Instance
             : new ConfiguredWorkspacePathResolver(workspaceRoot);
     }
+
+    private static IPromotionPolicyContextResolver ReadPromotionPolicyContextResolver(IConfiguration configuration)
+    {
+        var section = configuration.GetSection("DenPublish:PromotionPolicy");
+        var trustedOrchestrators = section.GetSection("TrustedOrchestrators").Get<string[]>() ?? [];
+        var trustedMode = ParsePolicyMode(section["TrustedOrchestratorMode"]);
+        var trustRequestBodyRequestedBy = section.GetValue<bool>("TrustRequestBodyRequestedBy");
+        if (trustedOrchestrators.Length == 0)
+        {
+            return DefaultPromotionPolicyContextResolver.Instance;
+        }
+
+        return new ConfiguredPromotionPolicyContextResolver(new TrustedOrchestratorPolicyOptions(
+            new HashSet<string>(trustedOrchestrators.Where(value => !string.IsNullOrWhiteSpace(value)), StringComparer.Ordinal),
+            trustedMode,
+            TrustRequestBodyRequestedBy: trustRequestBodyRequestedBy));
+    }
+
+    private static PromotionPolicyMode ParsePolicyMode(string? value)
+        => value switch
+        {
+            "audit_warn" => PromotionPolicyMode.AuditWarn,
+            "defensive" => PromotionPolicyMode.Defensive,
+            _ => PromotionPolicyMode.Strict
+        };
 
     private static string ReadAuditFilePath(IConfiguration configuration)
         => configuration["DenPublish:AuditFilePath"]

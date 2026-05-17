@@ -38,6 +38,42 @@ public sealed class PromotionValidationEndpointTests
         Assert.Equal(["src/DenChannels/"], workflow.CapturedRequest.ScopePolicy.AllowedPathPrefixes);
     }
 
+    [Fact]
+    public void Validate_MapsPolicyContextAndOrchestratorOverride()
+    {
+        var workflow = new RecordingWorkflow(new PromotionValidationWorkflowResult(
+            PublishValidationResult.Approved(
+                "workflow ok",
+                ["audit_warn downgraded unclassified_soft_failure"],
+                [new ValidationWarning(PublishFailureCode.UnclassifiedSoftFailure, "environmental issue", "trusted override")]),
+            LocalRef: "refs/den-publish/submissions/sub_1424_001",
+            FetchedHeadCommit: Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")));
+        var request = Request() with
+        {
+            Decision = Request().Decision with
+            {
+                OrchestratorOverride = new PublishOrchestratorOverrideApiModel(
+                    UnclassifiedFailurePolicy: "warn_and_audit",
+                    Reason: "SSH config permission issue is environmental",
+                    ExpectedRiskCategories: ["infra_papercut", "non_code"])
+            }
+        };
+        var resolver = new FixedPromotionPolicyContextResolver(new PromotionPolicyContext(PromotionCallerTrust.TrustedOrchestrator, PromotionPolicyMode.AuditWarn));
+
+        var response = PromotionValidationEndpoints.Validate(request, workflow, RequestWorkspacePathResolver.Instance, resolver);
+
+        Assert.True(response.IsPublishable);
+        var warning = Assert.Single(response.Warnings);
+        Assert.Equal("unclassified_soft_failure", warning.Code);
+        Assert.Equal("environmental issue", warning.Message);
+        Assert.NotNull(workflow.CapturedRequest);
+        Assert.Equal(PromotionCallerTrust.TrustedOrchestrator, workflow.CapturedRequest.EffectivePolicyContext.CallerTrust);
+        Assert.Equal(PromotionPolicyMode.AuditWarn, workflow.CapturedRequest.EffectivePolicyContext.Mode);
+        Assert.NotNull(workflow.CapturedRequest.Decision.OrchestratorOverride);
+        Assert.Equal("warn_and_audit", workflow.CapturedRequest.Decision.OrchestratorOverride.UnclassifiedFailurePolicy);
+        Assert.Equal(["infra_papercut", "non_code"], workflow.CapturedRequest.Decision.OrchestratorOverride.ExpectedRiskCategories);
+    }
+
 
 
     [Fact]
@@ -129,6 +165,34 @@ public sealed class PromotionValidationEndpointTests
         Assert.Equal(PublishFailureCode.InvalidRequest, result.Failure?.Code);
     }
 
+
+    [Fact]
+    public void ConfiguredPromotionPolicyContextResolver_DoesNotTrustRequestBodyRequestedByByDefault()
+    {
+        var resolver = new ConfiguredPromotionPolicyContextResolver(new TrustedOrchestratorPolicyOptions(
+            new HashSet<string>(["den-channels-orchestrator"], StringComparer.Ordinal),
+            PromotionPolicyMode.AuditWarn));
+
+        var context = resolver.Resolve(Request());
+
+        Assert.Equal(PromotionCallerTrust.Worker, context.CallerTrust);
+        Assert.Equal(PromotionPolicyMode.Strict, context.Mode);
+    }
+
+    [Fact]
+    public void ConfiguredPromotionPolicyContextResolver_CanExplicitlyTrustRequestBodyRequestedBy()
+    {
+        var resolver = new ConfiguredPromotionPolicyContextResolver(new TrustedOrchestratorPolicyOptions(
+            new HashSet<string>(["den-channels-orchestrator"], StringComparer.Ordinal),
+            PromotionPolicyMode.AuditWarn,
+            TrustRequestBodyRequestedBy: true));
+
+        var context = resolver.Resolve(Request());
+
+        Assert.Equal(PromotionCallerTrust.TrustedOrchestrator, context.CallerTrust);
+        Assert.Equal(PromotionPolicyMode.AuditWarn, context.Mode);
+    }
+
     [Fact]
     public void Validate_ReturnsInvalidRequestWithoutCallingWorkflowWhenShaIsMalformed()
     {
@@ -160,6 +224,11 @@ public sealed class PromotionValidationEndpointTests
             CapturedRequest = request;
             return result;
         }
+    }
+
+    private sealed class FixedPromotionPolicyContextResolver(PromotionPolicyContext context) : IPromotionPolicyContextResolver
+    {
+        public PromotionPolicyContext Resolve(PromotionValidationApiRequest request) => context;
     }
 
     private sealed class RecordingWorkflow(PromotionValidationWorkflowResult result) : IPromotionValidationWorkflow

@@ -43,6 +43,30 @@ public sealed record PublishScopeOverride(
     string Reason,
     string ApprovedBy);
 
+public sealed record PublishOrchestratorOverride(
+    string UnclassifiedFailurePolicy,
+    string Reason,
+    IReadOnlyList<string> ExpectedRiskCategories);
+
+public enum PromotionCallerTrust
+{
+    Worker,
+    TrustedOrchestrator,
+    Untrusted
+}
+
+public enum PromotionPolicyMode
+{
+    Strict,
+    AuditWarn,
+    Defensive
+}
+
+public sealed record PromotionPolicyContext(PromotionCallerTrust CallerTrust, PromotionPolicyMode Mode)
+{
+    public static PromotionPolicyContext StrictWorker { get; } = new(PromotionCallerTrust.Worker, PromotionPolicyMode.Strict);
+}
+
 public sealed record CodeSubmission(
     string SubmissionId,
     string ProjectId,
@@ -83,4 +107,5 @@ public sealed record PublishDecision(
     IReadOnlyList<string> ScopeOverrideIds,
     bool ValidateOnly,
     DateTimeOffset CreatedAt,
-    IReadOnlyList<PublishScopeOverride> ScopeOverrides = null!);
+    IReadOnlyList<PublishScopeOverride> ScopeOverrides = null!,
+    PublishOrchestratorOverride? OrchestratorOverride = null);

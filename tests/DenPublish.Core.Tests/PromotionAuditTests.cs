@@ -135,6 +135,110 @@ public sealed class PromotionAuditTests
 
 
     [Fact]
+    public void Validate_RejectsAuditWarnReplayWhenCurrentRequestIsNotTrusted()
+    {
+        var overrideRequest = new PublishOrchestratorOverride(
+            UnclassifiedFailurePolicy: "warn_and_audit",
+            Reason: "SSH config permission issue is environmental",
+            ExpectedRiskCategories: ["infra_papercut", "non_code"]);
+        var decision = Decision(orchestratorOverride: overrideRequest);
+        var existing = new PromotionAuditRecord(
+            RecordedAt: DateTimeOffset.Parse("2026-05-14T20:40:00Z"),
+            DecisionId: decision.DecisionId,
+            ProjectId: decision.ProjectId,
+            TaskId: decision.TaskId,
+            SubmissionId: decision.SubmissionId,
+            Status: PublishValidationStatus.Validated,
+            Summary: "workflow ok",
+            Decisions: ["audit_warn downgraded unclassified_soft_failure"],
+            Failures: [],
+            LocalRef: "refs/den-publish/submissions/sub_1424_001",
+            FetchedHeadCommit: decision.ExpectedHeadCommit,
+            Warnings: [new PromotionAuditWarning(PublishFailureCode.UnclassifiedSoftFailure, "environmental issue", "trusted override")],
+            OrchestratorOverride: new PromotionAuditOrchestratorOverride(
+                overrideRequest.UnclassifiedFailurePolicy,
+                overrideRequest.Reason,
+                overrideRequest.ExpectedRiskCategories),
+            PolicyContext: new PromotionAuditPolicyContext(PromotionCallerTrust.TrustedOrchestrator, PromotionPolicyMode.AuditWarn));
+        var inner = new RecordingPromotionWorkflow(new PromotionValidationWorkflowResult(
+            PublishValidationResult.Approved("inner should not run"),
+            LocalRef: null,
+            FetchedHeadCommit: null));
+        var audit = new RecordingAuditStore(PromotionAuditAppendResult.Appended(), existing);
+        var workflow = new AuditedPromotionValidationWorkflow(inner, audit);
+
+        var result = workflow.Validate(new PromotionValidationRequest(
+            decision,
+            ApprovedSubmission(),
+            "/workspace",
+            new ChangedFileScopePolicy(["src/DenChannels/"]),
+            PromotionPolicyContext.StrictWorker));
+
+        Assert.False(result.IsPublishable);
+        Assert.Equal(PublishValidationStatus.Rejected, result.Validation.Status);
+        var failure = Assert.Single(result.Validation.Failures);
+        Assert.Equal(PublishFailureCode.InvalidRequest, failure.Code);
+        Assert.Contains("policy context", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(0, inner.CallCount);
+        Assert.Empty(audit.Records);
+    }
+
+
+
+    [Fact]
+    public void Validate_RejectsReplayWhenScopeOverrideContextDiffers()
+    {
+        var originalDecision = Decision(
+            scopeOverrideIds: ["override_scope_1"],
+            scopeOverrides: [new PublishScopeOverride("override_scope_1", "Generated file outside normal prefix after tool regeneration", "planner")]);
+        var submission = ApprovedSubmission(review: new PublishReviewState(
+            680,
+            PublishReviewVerdict.LooksGood,
+            [new PublishReviewFinding("finding_1", Blocking: true, Resolved: false, OverrideId: "override_scope_1")]));
+        var existing = new PromotionAuditRecord(
+            RecordedAt: DateTimeOffset.Parse("2026-05-14T20:40:00Z"),
+            DecisionId: originalDecision.DecisionId,
+            ProjectId: originalDecision.ProjectId,
+            TaskId: originalDecision.TaskId,
+            SubmissionId: originalDecision.SubmissionId,
+            Status: PublishValidationStatus.Validated,
+            Summary: "workflow ok",
+            Decisions: ["scope override accepted"],
+            Failures: [],
+            LocalRef: "refs/den-publish/submissions/sub_1424_001",
+            FetchedHeadCommit: originalDecision.ExpectedHeadCommit,
+            ScopeOverrides: [new PromotionAuditScopeOverride(
+                "override_scope_1",
+                "finding_1",
+                "Generated file outside normal prefix after tool regeneration",
+                "planner")],
+            ScopeOverrideIds: ["override_scope_1"],
+            ReviewRoundId: originalDecision.ReviewRoundId,
+            ExpectedBaseBranch: originalDecision.ExpectedBaseBranch);
+        var inner = new RecordingPromotionWorkflow(new PromotionValidationWorkflowResult(
+            PublishValidationResult.Approved("inner should not run"),
+            LocalRef: null,
+            FetchedHeadCommit: null));
+        var audit = new RecordingAuditStore(PromotionAuditAppendResult.Appended(), existing);
+        var workflow = new AuditedPromotionValidationWorkflow(inner, audit);
+
+        var result = workflow.Validate(new PromotionValidationRequest(
+            Decision(),
+            submission,
+            "/workspace",
+            new ChangedFileScopePolicy(["src/DenChannels/"])));
+
+        Assert.False(result.IsPublishable);
+        Assert.Equal(PublishValidationStatus.Rejected, result.Validation.Status);
+        var failure = Assert.Single(result.Validation.Failures);
+        Assert.Equal(PublishFailureCode.InvalidRequest, failure.Code);
+        Assert.Contains("scope override", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(0, inner.CallCount);
+        Assert.Empty(audit.Records);
+    }
+
+
+    [Fact]
     public void Validate_RecordsUsedScopeOverrideReasons()
     {
         var decision = Decision(
@@ -163,6 +267,50 @@ public sealed class PromotionAuditTests
         Assert.Equal("finding_1", recordedOverride.FindingId);
         Assert.Equal("Generated file outside normal prefix after tool regeneration", recordedOverride.Reason);
         Assert.Equal("planner", recordedOverride.ApprovedBy);
+    }
+
+    [Fact]
+    public void Validate_RecordsWarningsAndOrchestratorOverride()
+    {
+        var overrideRequest = new PublishOrchestratorOverride(
+            UnclassifiedFailurePolicy: "warn_and_audit",
+            Reason: "SSH config permission issue is environmental",
+            ExpectedRiskCategories: ["infra_papercut", "non_code"]);
+        var decision = Decision(orchestratorOverride: overrideRequest);
+        var submission = ApprovedSubmission();
+        var innerResult = new PromotionValidationWorkflowResult(
+            PublishValidationResult.Approved(
+                "workflow ok",
+                ["audit_warn downgraded unclassified_soft_failure"],
+                [new ValidationWarning(
+                    PublishFailureCode.UnclassifiedSoftFailure,
+                    "SSH config permission issue after hard proof passed",
+                    "trusted orchestrator override: SSH config permission issue is environmental")]),
+            LocalRef: "refs/den-publish/submissions/sub_1424_001",
+            FetchedHeadCommit: submission.HeadCommit);
+        var audit = new RecordingAuditStore(PromotionAuditAppendResult.Appended());
+        var workflow = new AuditedPromotionValidationWorkflow(
+            new RecordingPromotionWorkflow(innerResult),
+            audit,
+            () => DateTimeOffset.Parse("2026-05-14T20:40:00Z"));
+
+        var result = workflow.Validate(new PromotionValidationRequest(
+            decision,
+            submission,
+            "/workspace",
+            new ChangedFileScopePolicy(["src/DenChannels/"]),
+            new PromotionPolicyContext(PromotionCallerTrust.TrustedOrchestrator, PromotionPolicyMode.AuditWarn)));
+
+        Assert.True(result.IsPublishable);
+        var record = Assert.Single(audit.Records);
+        var warning = Assert.Single(record.Warnings);
+        Assert.Equal(PublishFailureCode.UnclassifiedSoftFailure, warning.Code);
+        Assert.Equal("SSH config permission issue after hard proof passed", warning.Message);
+        Assert.Contains("trusted orchestrator override", warning.Reason, StringComparison.Ordinal);
+        Assert.NotNull(record.OrchestratorOverride);
+        Assert.Equal("warn_and_audit", record.OrchestratorOverride.UnclassifiedFailurePolicy);
+        Assert.Equal("SSH config permission issue is environmental", record.OrchestratorOverride.Reason);
+        Assert.Equal(["infra_papercut", "non_code"], record.OrchestratorOverride.ExpectedRiskCategories);
     }
 
     [Fact]
@@ -238,7 +386,8 @@ public sealed class PromotionAuditTests
 
     private static PublishDecision Decision(
         IReadOnlyList<string>? scopeOverrideIds = null,
-        IReadOnlyList<PublishScopeOverride>? scopeOverrides = null)
+        IReadOnlyList<PublishScopeOverride>? scopeOverrides = null,
+        PublishOrchestratorOverride? orchestratorOverride = null)
         => new(
             DecisionId: "pub_1424_001",
             ProjectId: "den-channels",
@@ -254,7 +403,8 @@ public sealed class PromotionAuditTests
             ScopeOverrideIds: scopeOverrideIds ?? [],
             ValidateOnly: true,
             CreatedAt: DateTimeOffset.Parse("2026-05-14T20:05:00Z"),
-            ScopeOverrides: scopeOverrides ?? []);
+            ScopeOverrides: scopeOverrides ?? [],
+            OrchestratorOverride: orchestratorOverride);
 
     private static CodeSubmission ApprovedSubmission(PublishReviewState? review = null)
         => new(
