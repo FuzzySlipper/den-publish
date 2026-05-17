@@ -12,6 +12,7 @@ import json
 import os
 import pwd
 import subprocess
+from datetime import datetime, timedelta, timezone
 import sys
 import urllib.error
 import urllib.request
@@ -173,6 +174,13 @@ def live_credential_policy_is_explicit_and_redacted(status: dict[str, Any]) -> b
     )
 
 
+def promotion_policy_mode(status: dict[str, Any]) -> str:
+    policy = status.get("promotionPolicy", {})
+    mode = policy.get("trustedOrchestratorMode", {}) if isinstance(policy, dict) else {}
+    value = mode.get("value") or mode.get("display")
+    return str(value or "strict").removesuffix(" (default)")
+
+
 def check_status_payload(status: Any, *, allow_live_enabled: bool = False) -> list[Finding]:
     findings: list[Finding] = []
     if not isinstance(status, dict) or status.get("configurationContract") != "den-publish-runtime-config-v2":
@@ -180,6 +188,17 @@ def check_status_payload(status: Any, *, allow_live_enabled: bool = False) -> li
         return findings
     live_enabled = status.get("livePublishing", {}).get("enabled") is True
     live_credential_configured = status.get("liveCredentialPolicy", {}).get("configured") is True
+    mode = promotion_policy_mode(status)
+    if mode == "audit_warn":
+        policy = status.get("promotionPolicy", {})
+        trusted = policy.get("trustedOrchestrators", {}) if isinstance(policy, dict) else {}
+        findings.append(Finding(
+            "warning",
+            "den_publish_status",
+            "promotion_policy_audit_warn",
+            "trusted orchestrators are in audit_warn mode",
+            f"trusted_orchestrators={trusted.get('display', '[unknown]')} lock_down=DenPublish:PromotionPolicy:TrustedOrchestratorMode=strict_or_defensive",
+        ))
     if allow_live_enabled:
         if not live_enabled:
             findings.append(Finding("error", "den_publish_status", "live_publishing_not_enabled", "approved-live mode requires livePublishing.enabled=true"))
@@ -266,6 +285,62 @@ def check_project_readiness(project_id: str, *, allow_live_enabled: bool = False
     return []
 
 
+
+def parse_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def check_recent_allowed_with_warnings(audit_file: Path, *, now: str | datetime | None = None, lookback_hours: int = 24) -> list[Finding]:
+    if not audit_file.exists():
+        return []
+    if isinstance(now, datetime):
+        now_dt = now if now.tzinfo else now.replace(tzinfo=timezone.utc)
+    elif isinstance(now, str):
+        parsed = parse_timestamp(now)
+        now_dt = parsed if parsed is not None else datetime.now(timezone.utc)
+    else:
+        now_dt = datetime.now(timezone.utc)
+    cutoff = now_dt - timedelta(hours=lookback_hours)
+
+    findings: list[Finding] = []
+    for line_number, line in enumerate(audit_file.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            findings.append(Finding("warning", "audit", "audit_record_unreadable", "audit record is not valid JSON", f"line={line_number}"))
+            continue
+        recorded_at = parse_timestamp(record.get("recorded_at"))
+        if recorded_at is None or recorded_at < cutoff:
+            continue
+        warnings = record.get("warnings") or []
+        if record.get("status") != "validated" or not warnings:
+            continue
+        warning_codes = ",".join(str(w.get("code", "unknown")) for w in warnings if isinstance(w, dict))
+        findings.append(Finding(
+            "warning",
+            "audit",
+            "recent_allowed_with_warnings_publish",
+            "recent promotion was allowed with warnings",
+            " ".join([
+                f"decision={record.get('decision_id', '[unknown]')}",
+                f"project={record.get('project_id', '[unknown]')}",
+                f"task={record.get('task_id', '[unknown]')}",
+                f"requested_by={record.get('requested_by', '[unknown]')}",
+                f"target={record.get('target_remote', '[unknown]')}/{record.get('target_branch', '[unknown]')}",
+                f"head={record.get('fetched_head_commit', '[unknown]')}",
+                f"warnings={warning_codes or '[unknown]'}",
+                "triage=inspect_audit_then_set_TrustedOrchestratorMode=strict_or_defensive",
+            ]),
+        ))
+    return findings
+
 def collect_findings(args: argparse.Namespace) -> tuple[list[Finding], dict[str, Any]]:
     findings: list[Finding] = []
     summary: dict[str, Any] = {"schema": "den_publish_promotion_workflow_watchdog", "schemaVersion": 1}
@@ -284,6 +359,13 @@ def collect_findings(args: argparse.Namespace) -> tuple[list[Finding], dict[str,
     status, status_findings = check_status(args.status_url, allow_live_enabled=args.allow_live_enabled)
     findings.extend(status_findings)
     findings.extend(check_runtime_inventory_alignment(all_project_ids, status))
+    audit_file_value = status.get("auditFilePath", {}).get("value") if isinstance(status, dict) else None
+    audit_file_arg = getattr(args, "audit_file", None)
+    audit_file = audit_file_arg or (Path(audit_file_value) if audit_file_value else None)
+    if audit_file is not None:
+        findings.extend(check_recent_allowed_with_warnings(
+            audit_file,
+            lookback_hours=getattr(args, "allowed_warning_lookback_hours", 24)))
     findings.extend(check_mcp_facade(args.mcp_url))
 
     findings.extend(run_subcheck("metadata", [sys.executable, "scripts/check-promotion-metadata-drift.py", *(["--allow-live-enabled"] if args.allow_live_enabled else [])], warning_is_failure=True))
@@ -311,6 +393,8 @@ def main() -> int:
     parser.add_argument("--systemd-scope", choices=["system", "user"], default="system")
     parser.add_argument("--service-user", default=None, help="user for --systemd-scope=user checks")
     parser.add_argument("--project", help="limit project readiness checks to one dry-run-ready project")
+    parser.add_argument("--audit-file", type=Path, default=None, help="promotion audit JSONL path; defaults to /config/status auditFilePath.value when present")
+    parser.add_argument("--allowed-warning-lookback-hours", type=int, default=24, help="hours of audit history to scan for validated records with warnings")
     parser.add_argument("--allow-live-enabled", action="store_true", help="accept persistent live publishing only when an explicit redacted ssh_command credential policy is configured")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--verbose", action="store_true", help="print an OK summary when healthy")

@@ -47,6 +47,8 @@ The watchdog verifies:
 - the public Den MCP facade exposes `request_den_publish_dry_run`;
 - monitored promotion inventory projects match runtime project policy;
 - `scripts/check-promotion-metadata-drift.py` reports no errors;
+- permissive `audit_warn` trusted-orchestrator posture is visible as a warning with exact lock-down guidance;
+- recent validated audit records with non-empty warning lists are reported with requester, SHA/ref/target, and warning codes;
 - each monitored project is `ready` according to `scripts/check-project-promotion-readiness.py --json`;
 - each monitored project passes `scripts/check-code-gate-repo.py --project <project>` without errors.
 
@@ -70,6 +72,8 @@ Common findings:
 | `den_publish_status` | `live_publishing_enabled` | Live publishing is enabled while the checker is running in default fail-closed mode. | If #1468 production live mode is approved, rerun with `--allow-live-enabled`; otherwise rollback/disable live. |
 | `den_publish_status` | `live_credentials_configured` | Live canonical credentials are configured while the checker is running in default fail-closed mode. | If #1468 production live mode is approved, rerun with `--allow-live-enabled`; otherwise rollback/disable live. |
 | `den_publish_status` | `live_credentials_not_explicit_redacted` | Approved-live mode saw live enabled but the credential policy was not explicit/redacted/fingerprinted. | Stop publishing and inspect service env/status; do not continue until status redaction is restored. |
+| `den_publish_status` | `promotion_policy_audit_warn` | Trusted orchestrators are still in permissive audit-warn mode. | During an incident, set `DenPublish__PromotionPolicy__TrustedOrchestratorMode=strict` globally or `DenPublish__Projects__<project>__TrustedOrchestratorMode=defensive` for project-only containment. |
+| `audit` | `recent_allowed_with_warnings_publish` | A recent validate/publish decision was allowed with warnings. | Inspect `requested_by`, warning codes, ingress ref/head SHA/target branch, then lock down the relevant project before retrying. |
 | `mcp_facade` | `dry_run_tool_missing` | Den Core MCP facade no longer exposes the standard dry-run tool. | Inspect Den Core deployment/config before launching promotion work. |
 | `metadata` | `runtime_policy_missing` | A monitored inventory project is absent from den-publish runtime policy. | Re-run metadata drift checker; do not hot-patch service config without an approval plan. |
 | `readiness` | `project_unready` / `project_not_ready` | A per-project readiness preflight no longer classifies ready. | Run `python3 scripts/check-project-promotion-readiness.py --project <project> --json`. |

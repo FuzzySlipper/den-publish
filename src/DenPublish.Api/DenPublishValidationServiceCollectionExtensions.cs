@@ -153,6 +153,7 @@ public static class DenPublishValidationServiceCollectionExtensions
         var trustedMode = ParsePolicyMode(section["TrustedOrchestratorMode"]);
         var trustRequestBodyRequestedBy = section.GetValue<bool>("TrustRequestBodyRequestedBy");
         var trustForwardedCallerHeaders = section.GetValue<bool>("TrustForwardedCallerHeaders");
+        var projectTrustedModes = ReadProjectTrustedModes(configuration);
         if (trustedOrchestrators.Length == 0)
         {
             return DefaultPromotionPolicyContextResolver.Instance;
@@ -162,7 +163,29 @@ public static class DenPublishValidationServiceCollectionExtensions
             new HashSet<string>(trustedOrchestrators.Where(value => !string.IsNullOrWhiteSpace(value)), StringComparer.Ordinal),
             trustedMode,
             TrustRequestBodyRequestedBy: trustRequestBodyRequestedBy,
-            TrustForwardedCallerHeaders: trustForwardedCallerHeaders));
+            TrustForwardedCallerHeaders: trustForwardedCallerHeaders,
+            ProjectTrustedModes: projectTrustedModes));
+    }
+
+    private static IReadOnlyDictionary<string, PromotionPolicyMode> ReadProjectTrustedModes(IConfiguration configuration)
+    {
+        var result = new Dictionary<string, PromotionPolicyMode>(StringComparer.Ordinal);
+        foreach (var child in configuration.GetSection("DenPublish:Projects").GetChildren())
+        {
+            var configuredMode = child["TrustedOrchestratorMode"];
+            if (string.IsNullOrWhiteSpace(configuredMode))
+            {
+                continue;
+            }
+
+            var projectId = child["ProjectId"] ?? child.Key;
+            if (!string.IsNullOrWhiteSpace(projectId))
+            {
+                result[projectId] = ParsePolicyMode(configuredMode);
+            }
+        }
+
+        return result;
     }
 
     private static PromotionPolicyMode ParsePolicyMode(string? value)

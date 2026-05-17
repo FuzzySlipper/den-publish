@@ -89,6 +89,55 @@ Required result:
 - live publishing disabled before credential placement;
 - audit file readable and line count recorded.
 
+
+## Audit-warn lock-down controls
+
+`audit_warn` is the soft default for trusted orchestrators while the promotion workflow is being hardened. It is intentionally easy to lock down globally or for a single project when a concrete problem appears. These changes affect validation policy only; they do not create credentials, enable live publishing, restart services, or mutate remotes by themselves.
+
+### Global lock-down
+
+Set all trusted-orchestrator requests to strict or defensive mode:
+
+```text
+DenPublish__PromotionPolicy__TrustedOrchestratorMode=strict
+# or
+DenPublish__PromotionPolicy__TrustedOrchestratorMode=defensive
+```
+
+Use `strict` to reject soft failures that `audit_warn` would otherwise allow with warnings. Use `defensive` as the incident posture when operators want trusted-orchestrator requests to remain identifiable while disabling the permissive warning escape hatch.
+
+### Project-specific lock-down
+
+Set a per-project override without changing the global default:
+
+```text
+DenPublish__Projects__den-publish__TrustedOrchestratorMode=defensive
+# or
+DenPublish__Projects__den-publish__TrustedOrchestratorMode=strict
+```
+
+For indexed project configuration, use the numeric section key and keep `ProjectId` unchanged:
+
+```text
+DenPublish__Projects__0__ProjectId=den-publish
+DenPublish__Projects__0__TrustedOrchestratorMode=defensive
+```
+
+`/config/status` reports both the global `promotionPolicy.trustedOrchestratorMode` and each project's effective `projectPolicies[].trustedOrchestratorMode`. Values inherited from the global policy display as defaults; project overrides are marked configured.
+
+### Incident triage checklist for allowed-with-warnings records
+
+When the watchdog reports `recent_allowed_with_warnings_publish`, inspect the audit record before retrying promotion work:
+
+1. **Who requested it:** `requested_by` and, when present, warning metadata `requested_by` / caller trust.
+2. **Which warnings were allowed:** `warnings[].code`, `warnings[].message`, `warnings[].severity`, `warnings[].strict_action`, and `warnings[].permissive_action`.
+3. **Exact source:** `submission_id`, `ingress_ref`, `fetched_head_commit`, and `base_commit`.
+4. **Exact target:** `target_remote`, `target_branch`, and `operation`.
+5. **Review state:** `review_round_id`, verdict, and unresolved blocking finding status in Den.
+6. **Lock-down action:** set either `DenPublish__PromotionPolicy__TrustedOrchestratorMode=strict` for global lock-down or `DenPublish__Projects__<project>__TrustedOrchestratorMode=defensive` / `strict` for project-only containment, then restart through the normal approved service-change plan.
+
+Do not bypass the audit record by replaying an older decision after lock-down. The material validation inputs and policy context must match the current request.
+
 ## Enable live publishing after credential placement
 
 After credential files are placed and the public key is authorized on the canonical repository, update the service environment atomically with a timestamped backup. The environment must include the existing validate-only settings plus only this live delta:

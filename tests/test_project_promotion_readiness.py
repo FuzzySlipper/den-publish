@@ -291,3 +291,58 @@ def test_cli_prints_json_and_returns_nonzero_for_unready_project(tmp_path: Path)
     assert payload["projectId"] == project_id
     assert payload["classification"] == "needs_code_gate"
     assert "DEN_CODE_GATE_ADMIN_TOKEN" not in proc.stdout
+
+
+def test_ready_project_reports_audit_warn_policy_posture():
+    module = load_module()
+    project_id = "den-channels"
+    status = status_payload(project_id)
+    status["promotionPolicy"] = {
+        "trustedOrchestratorMode": {"configured": True, "value": "audit_warn", "display": "audit_warn"},
+        "trustedOrchestrators": {"configured": True, "display": "1 configured"},
+    }
+
+    result = module.evaluate_project(
+        project_id,
+        promotion_inventory=promotion_inventory(promotion_project(project_id)),
+        code_gate_inventory=code_gate_inventory(project_id),
+        status=status,
+        mcp_tools=mcp_tools_payload(),
+        den_projects={project_id: {"root_path": project_id}},
+        run_subchecks=False,
+    )
+
+    assert result["classification"] == "ready"
+    assert result["checks"]["promotion_policy"]["status"] == "warning"
+    assert result["checks"]["promotion_policy"]["mode"] == "audit_warn"
+    assert any("TrustedOrchestratorMode=strict" in action for action in result["nextActions"])
+
+
+def test_project_specific_defensive_policy_overrides_global_audit_warn_posture():
+    module = load_module()
+    project_id = "den-channels"
+    status = status_payload(project_id)
+    status["promotionPolicy"] = {
+        "trustedOrchestratorMode": {"configured": True, "value": "audit_warn", "display": "audit_warn"},
+        "trustedOrchestrators": {"configured": True, "display": "1 configured"},
+    }
+    status["projectPolicies"][0]["trustedOrchestratorMode"] = {
+        "configured": True,
+        "value": "defensive",
+        "display": "defensive",
+    }
+
+    result = module.evaluate_project(
+        project_id,
+        promotion_inventory=promotion_inventory(promotion_project(project_id)),
+        code_gate_inventory=code_gate_inventory(project_id),
+        status=status,
+        mcp_tools=mcp_tools_payload(),
+        den_projects={project_id: {"root_path": project_id}},
+        run_subchecks=False,
+    )
+
+    assert result["classification"] == "ready"
+    assert result["checks"]["promotion_policy"]["status"] == "ok"
+    assert result["checks"]["promotion_policy"]["mode"] == "defensive"
+    assert not any("TrustedOrchestratorMode=strict" in action for action in result["nextActions"])

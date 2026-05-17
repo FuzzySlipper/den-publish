@@ -160,3 +160,43 @@ def test_project_filter_alignment_uses_full_monitored_inventory(monkeypatch):
     assert findings == []
     assert summary["projectsChecked"] == ["den-router"]
     assert summary["monitoredProjects"] == ["den-core", "den-router"]
+
+
+def test_status_check_reports_audit_warn_policy_posture():
+    module = load_module()
+    status = {
+        "configurationContract": "den-publish-runtime-config-v2",
+        "livePublishing": {"enabled": False},
+        "liveCredentialPolicy": {"configured": False},
+        "promotionPolicy": {
+            "trustedOrchestratorMode": {"configured": True, "value": "audit_warn", "display": "audit_warn"},
+            "trustedOrchestrators": {"configured": True, "display": "1 configured"},
+            "trustRequestBodyRequestedBy": {"enabled": True},
+        },
+    }
+
+    findings = module.check_status_payload(status)
+
+    assert any(f.code == "promotion_policy_audit_warn" and f.severity == "warning" for f in findings)
+
+
+def test_recent_allowed_with_warnings_audit_records_are_reported(tmp_path):
+    module = load_module()
+    audit_file = tmp_path / "promotion-validation.jsonl"
+    audit_file.write_text(
+        '{"recorded_at":"2026-05-17T00:00:00Z","decision_id":"pub_1","project_id":"den-channels",'
+        '"task_id":1476,"submission_id":"sub_1","requested_by":"den-hermes-runner",'
+        '"status":"validated","target_branch":"task/1476","target_remote":"canonical",'
+        '"fetched_head_commit":"43525c846b1f12e1539872f9b374b1781272c886",'
+        '"warnings":[{"code":"unclassified_soft_failure","message":"soft failure","reason":"trusted override"}],'
+        '"policy_context":{"caller_trust":"trusted_orchestrator","mode":"audit_warn"}}\n',
+        encoding="utf-8",
+    )
+
+    findings = module.check_recent_allowed_with_warnings(audit_file, now="2026-05-17T01:00:00Z", lookback_hours=24)
+
+    assert len(findings) == 1
+    assert findings[0].code == "recent_allowed_with_warnings_publish"
+    assert "requested_by=den-hermes-runner" in findings[0].detail
+    assert "task=1476" in findings[0].detail
+    assert "head=43525c846b1f12e1539872f9b374b1781272c886" in findings[0].detail

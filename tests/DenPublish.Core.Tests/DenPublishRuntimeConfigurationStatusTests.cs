@@ -63,4 +63,34 @@ public sealed class DenPublishRuntimeConfigurationStatusTests
         Assert.Equal(["task/"], project.PushBranchPrefixes);
     }
 
+
+
+    [Fact]
+    public void GetStatus_ReportsPromotionPolicyPosture()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DenPublish:WorkspaceRoot"] = "/home/agents/runtime/den-publish/workspaces",
+                ["DenPublish:AuditFilePath"] = "/home/agents/runtime/den-publish/audit/promotion-validation.jsonl",
+                ["DenPublish:PromotionPolicy:TrustedOrchestratorMode"] = "audit_warn",
+                ["DenPublish:PromotionPolicy:TrustedOrchestrators:0"] = "den-hermes-runner",
+                ["DenPublish:PromotionPolicy:TrustRequestBodyRequestedBy"] = "true",
+                ["DenPublish:Projects:den-publish:TrustedOrchestratorMode"] = "defensive"
+            })
+            .Build();
+        var provider = new DenPublishRuntimeConfigurationStatusProvider(configuration);
+
+        var status = provider.GetStatus();
+
+        Assert.True(status.PromotionPolicy.TrustedOrchestrators.Configured);
+        Assert.Equal("audit_warn", status.PromotionPolicy.TrustedOrchestratorMode.Value);
+        Assert.Equal("audit_warn", status.PromotionPolicy.TrustedOrchestratorMode.Display);
+        Assert.Equal("1 configured", status.PromotionPolicy.TrustedOrchestrators.Display);
+        Assert.True(status.PromotionPolicy.TrustRequestBodyRequestedBy.Enabled);
+        var project = Assert.Single(status.ProjectPolicies);
+        Assert.Equal("defensive", project.TrustedOrchestratorMode.Value);
+        Assert.Contains(status.Warnings, warning => warning.Code == "promotion_policy_audit_warn");
+    }
+
 }

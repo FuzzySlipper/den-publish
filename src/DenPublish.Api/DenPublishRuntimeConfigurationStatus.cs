@@ -18,7 +18,8 @@ public sealed class DenPublishRuntimeConfigurationStatusProvider(IConfiguration 
         var canonicalRemoteUrl = ReadRedactedSetting("DenPublish:TargetPolicy:CanonicalRemoteUrl", "DenPublish__TargetPolicy__CanonicalRemoteUrl", requiredForProduction: false);
         var livePublishing = ReadBooleanSetting("DenPublish:Publishing:Enabled", "DenPublish__Publishing__Enabled");
         var liveCredentialPolicy = ReadCredentialPolicySetting();
-        var projectPolicies = ReadProjectPolicies();
+        var promotionPolicy = ReadPromotionPolicyStatus();
+        var projectPolicies = ReadProjectPolicies(promotionPolicy.TrustedOrchestratorMode.Value);
 
         var warnings = new List<DenPublishRuntimeConfigurationWarning>();
         if (!workspaceRoot.Configured)
@@ -73,6 +74,13 @@ public sealed class DenPublishRuntimeConfigurationStatusProvider(IConfiguration 
             }
         }
 
+        if (string.Equals(promotionPolicy.TrustedOrchestratorMode.Value, "audit_warn", StringComparison.Ordinal))
+        {
+            warnings.Add(new DenPublishRuntimeConfigurationWarning(
+                "promotion_policy_audit_warn",
+                "Trusted orchestrators are in audit_warn mode; unclassified soft failures may be allowed with warnings. Switch to strict or defensive mode during an incident."));
+        }
+
         return new DenPublishRuntimeConfigurationStatus(
             Service: "den-publish",
             ConfigurationContract: "den-publish-runtime-config-v2",
@@ -82,10 +90,48 @@ public sealed class DenPublishRuntimeConfigurationStatusProvider(IConfiguration 
             ProjectPolicies: projectPolicies,
             LivePublishing: livePublishing,
             LiveCredentialPolicy: liveCredentialPolicy,
+            PromotionPolicy: promotionPolicy,
             Warnings: warnings);
     }
 
-    private IReadOnlyList<DenPublishProjectRuntimePolicy> ReadProjectPolicies()
+    private DenPublishRuntimePromotionPolicyStatus ReadPromotionPolicyStatus()
+    {
+        var section = configuration.GetSection("DenPublish:PromotionPolicy");
+        var mode = section["TrustedOrchestratorMode"];
+        var trustedOrchestrators = section.GetSection("TrustedOrchestrators").Get<string[]>() ?? [];
+
+        return new DenPublishRuntimePromotionPolicyStatus(
+            TrustedOrchestratorMode: string.IsNullOrWhiteSpace(mode)
+                ? DenPublishRuntimeConfigurationSetting.Defaulted(
+                    "DenPublish:PromotionPolicy:TrustedOrchestratorMode",
+                    "DenPublish__PromotionPolicy__TrustedOrchestratorMode",
+                    "strict",
+                    requiredForProduction: false)
+                : DenPublishRuntimeConfigurationSetting.Plain(
+                    "DenPublish:PromotionPolicy:TrustedOrchestratorMode",
+                    "DenPublish__PromotionPolicy__TrustedOrchestratorMode",
+                    NormalizePolicyMode(mode),
+                    requiredForProduction: false),
+            TrustedOrchestrators: trustedOrchestrators.Length == 0
+                ? DenPublishRuntimeConfigurationSetting.Missing(
+                    "DenPublish:PromotionPolicy:TrustedOrchestrators",
+                    "DenPublish__PromotionPolicy__TrustedOrchestrators",
+                    requiredForProduction: false)
+                : DenPublishRuntimeConfigurationSetting.Redacted(
+                    "DenPublish:PromotionPolicy:TrustedOrchestrators",
+                    "DenPublish__PromotionPolicy__TrustedOrchestrators",
+                    display: $"{trustedOrchestrators.Length} configured",
+                    fingerprint: Fingerprint($"trusted_orchestrators:{string.Join("\n", trustedOrchestrators.Order(StringComparer.Ordinal))}"),
+                    requiredForProduction: false),
+            TrustRequestBodyRequestedBy: ReadBooleanSetting(
+                "DenPublish:PromotionPolicy:TrustRequestBodyRequestedBy",
+                "DenPublish__PromotionPolicy__TrustRequestBodyRequestedBy"),
+            TrustForwardedCallerHeaders: ReadBooleanSetting(
+                "DenPublish:PromotionPolicy:TrustForwardedCallerHeaders",
+                "DenPublish__PromotionPolicy__TrustForwardedCallerHeaders"));
+    }
+
+    private IReadOnlyList<DenPublishProjectRuntimePolicy> ReadProjectPolicies(string globalTrustedOrchestratorMode)
     {
         var result = new List<DenPublishProjectRuntimePolicy>();
         foreach (var child in configuration.GetSection("DenPublish:Projects").GetChildren().OrderBy(section => section.Key, StringComparer.Ordinal))
@@ -104,6 +150,7 @@ public sealed class DenPublishRuntimeConfigurationStatusProvider(IConfiguration 
                     $"DenPublish__Projects__{sectionKey}__TargetRemoteName",
                     child["TargetRemoteName"] ?? "canonical",
                     requiredForProduction: true),
+                TrustedOrchestratorMode: ProjectTrustedModeSetting(sectionKey, child, globalTrustedOrchestratorMode),
                 CanonicalRemoteUrl: RedactedSettingFromValue(
                     $"DenPublish:Projects:{sectionKey}:CanonicalRemoteUrl",
                     $"DenPublish__Projects__{sectionKey}__CanonicalRemoteUrl",
@@ -120,6 +167,16 @@ public sealed class DenPublishRuntimeConfigurationStatusProvider(IConfiguration 
         }
 
         return result;
+    }
+
+    private static DenPublishRuntimeConfigurationSetting ProjectTrustedModeSetting(string sectionKey, IConfigurationSection section, string globalMode)
+    {
+        var key = $"DenPublish:Projects:{sectionKey}:TrustedOrchestratorMode";
+        var environmentKey = $"DenPublish__Projects__{sectionKey}__TrustedOrchestratorMode";
+        var value = section["TrustedOrchestratorMode"];
+        return string.IsNullOrWhiteSpace(value)
+            ? DenPublishRuntimeConfigurationSetting.Defaulted(key, environmentKey, globalMode, requiredForProduction: false)
+            : DenPublishRuntimeConfigurationSetting.Plain(key, environmentKey, NormalizePolicyMode(value), requiredForProduction: false);
     }
 
     private DenPublishRuntimeConfigurationSetting ReadPlainSetting(string key, string environmentKey, bool requiredForProduction)
@@ -190,6 +247,14 @@ public sealed class DenPublishRuntimeConfigurationStatusProvider(IConfiguration 
             requiredForProduction: false);
     }
 
+    private static string NormalizePolicyMode(string value)
+        => value switch
+        {
+            "audit_warn" => "audit_warn",
+            "defensive" => "defensive",
+            _ => "strict"
+        };
+
     private DenPublishRuntimeBooleanSetting ReadBooleanSetting(string key, string environmentKey)
     {
         var raw = configuration[key];
@@ -239,11 +304,19 @@ public sealed record DenPublishRuntimeConfigurationStatus(
     IReadOnlyList<DenPublishProjectRuntimePolicy> ProjectPolicies,
     DenPublishRuntimeBooleanSetting LivePublishing,
     DenPublishRuntimeConfigurationSetting LiveCredentialPolicy,
+    DenPublishRuntimePromotionPolicyStatus PromotionPolicy,
     IReadOnlyList<DenPublishRuntimeConfigurationWarning> Warnings);
+
+public sealed record DenPublishRuntimePromotionPolicyStatus(
+    DenPublishRuntimeConfigurationSetting TrustedOrchestratorMode,
+    DenPublishRuntimeConfigurationSetting TrustedOrchestrators,
+    DenPublishRuntimeBooleanSetting TrustRequestBodyRequestedBy,
+    DenPublishRuntimeBooleanSetting TrustForwardedCallerHeaders);
 
 public sealed record DenPublishProjectRuntimePolicy(
     string ProjectId,
     DenPublishRuntimeConfigurationSetting TargetRemoteName,
+    DenPublishRuntimeConfigurationSetting TrustedOrchestratorMode,
     DenPublishRuntimeConfigurationSetting CanonicalRemoteUrl,
     DenPublishRuntimeConfigurationSetting CodeGateRemoteUrl,
     DenPublishRuntimeConfigurationSetting CodeGateReadCredential,
@@ -264,6 +337,9 @@ public sealed record DenPublishRuntimeConfigurationSetting(
 
     public static DenPublishRuntimeConfigurationSetting Plain(string key, string environmentKey, string value, bool requiredForProduction)
         => new(key, environmentKey, Configured: true, Value: value, Display: value, Fingerprint: null, requiredForProduction);
+
+    public static DenPublishRuntimeConfigurationSetting Defaulted(string key, string environmentKey, string value, bool requiredForProduction)
+        => new(key, environmentKey, Configured: false, Value: value, Display: $"{value} (default)", Fingerprint: null, requiredForProduction);
 
     public static DenPublishRuntimeConfigurationSetting Redacted(string key, string environmentKey, string display, string fingerprint, bool requiredForProduction)
         => new(key, environmentKey, Configured: true, Value: "[redacted]", Display: display, Fingerprint: fingerprint, requiredForProduction);

@@ -32,6 +32,7 @@ public sealed record TrustedOrchestratorPolicyOptions(
     PromotionPolicyMode TrustedMode,
     bool TrustRequestBodyRequestedBy = false,
     bool TrustForwardedCallerHeaders = false,
+    IReadOnlyDictionary<string, PromotionPolicyMode>? ProjectTrustedModes = null,
     string ForwardedRequestedByHeaderName = "X-Den-Requested-By",
     string ForwardedCallerTrustHeaderName = "X-Den-Caller-Trust",
     string ForwardedPolicyModeHeaderName = "X-Den-Promotion-Policy-Mode")
@@ -51,7 +52,7 @@ public sealed class ConfiguredPromotionPolicyContextResolver(TrustedOrchestrator
         // Only honor it when an operator explicitly opts into this local/LAN trust model.
         if (options.TrustRequestBodyRequestedBy && options.TrustedOrchestrators.Contains(request.Decision.RequestedBy))
         {
-            return new PromotionPolicyContext(PromotionCallerTrust.TrustedOrchestrator, options.TrustedMode);
+            return new PromotionPolicyContext(PromotionCallerTrust.TrustedOrchestrator, TrustedModeFor(request.Decision.ProjectId));
         }
 
         return PromotionPolicyContext.StrictWorker;
@@ -64,7 +65,7 @@ public sealed class ConfiguredPromotionPolicyContextResolver(TrustedOrchestrator
 
         if (options.TrustForwardedCallerHeaders && IsTrustedForwardedCaller(request, headers))
         {
-            return new PromotionPolicyContext(PromotionCallerTrust.TrustedOrchestrator, options.TrustedMode);
+            return new PromotionPolicyContext(PromotionCallerTrust.TrustedOrchestrator, TrustedModeFor(request.Decision.ProjectId));
         }
 
         return Resolve(request);
@@ -87,8 +88,13 @@ public sealed class ConfiguredPromotionPolicyContextResolver(TrustedOrchestrator
         }
 
         var policyMode = SingleHeader(headers, options.ForwardedPolicyModeHeaderName);
-        return string.IsNullOrWhiteSpace(policyMode) || TryParsePolicyMode(policyMode) == options.TrustedMode;
+        return string.IsNullOrWhiteSpace(policyMode) || TryParsePolicyMode(policyMode) == TrustedModeFor(request.Decision.ProjectId);
     }
+
+    private PromotionPolicyMode TrustedModeFor(string projectId)
+        => options.ProjectTrustedModes is not null && options.ProjectTrustedModes.TryGetValue(projectId, out var mode)
+            ? mode
+            : options.TrustedMode;
 
     private static string? SingleHeader(IHeaderDictionary headers, string name)
     {

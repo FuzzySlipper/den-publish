@@ -111,3 +111,20 @@ A blocked workspace/SSH preflight is not warning-eligible under `audit_warn`; fi
 ## Secret boundary
 
 The checker does not read Forgejo admin tokens, private keys, canonical push credentials, or deploy-key material by default. It does not create repos, mutate service config, or publish code. Any command output included in JSON is limited to existing checker stdout tails and should not contain secrets.
+
+
+## Policy posture reporting
+
+The readiness checker reports `checks.promotion_policy` for the effective trusted-orchestrator posture visible in `/config/status`.
+
+- `strict` / `defensive`: reported as `ok`.
+- `audit_warn`: reported as `warning` while preserving the overall `ready` classification when all objective promotion prerequisites are present.
+
+The warning includes the exact first-response controls:
+
+```text
+DenPublish:PromotionPolicy:TrustedOrchestratorMode=strict
+DenPublish:Projects:<project_id>:TrustedOrchestratorMode=defensive
+```
+
+Use the global setting to lock down all trusted orchestrators. Use the project setting when only one project has a concrete issue and other projects should remain in the softer audit-first posture.

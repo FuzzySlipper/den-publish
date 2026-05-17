@@ -173,6 +173,23 @@ def live_credential_policy_is_explicit_and_redacted(status: dict[str, Any]) -> b
     )
 
 
+def promotion_policy_mode(status: dict[str, Any]) -> str:
+    policy = status.get("promotionPolicy", {})
+    mode = policy.get("trustedOrchestratorMode", {}) if isinstance(policy, dict) else {}
+    value = mode.get("value") or mode.get("display")
+    return str(value or "strict").removesuffix(" (default)")
+
+
+def effective_promotion_policy_mode(status: dict[str, Any], runtime_policy: dict[str, Any] | None) -> tuple[str, str]:
+    if isinstance(runtime_policy, dict):
+        project_mode = runtime_policy.get("trustedOrchestratorMode", {})
+        if isinstance(project_mode, dict):
+            value = project_mode.get("value") or project_mode.get("display")
+            if value:
+                return str(value).removesuffix(" (default)"), "project"
+    return promotion_policy_mode(status), "global"
+
+
 def check(status: str, message: str, **extra: Any) -> dict[str, Any]:
     payload = {"status": status, "message": message}
     payload.update(extra)
@@ -292,6 +309,20 @@ def evaluate_project(
         blockers.append("runtime_status")
     else:
         checks["runtime_status"] = check("ok", "den-publish runtime status contract is v2")
+
+    mode, mode_source = effective_promotion_policy_mode(status, runtime_policy)
+    if mode == "audit_warn":
+        checks["promotion_policy"] = check(
+            "warning",
+            "trusted orchestrators are in audit_warn mode",
+            mode=mode,
+            source=mode_source,
+            hardenGlobal="DenPublish:PromotionPolicy:TrustedOrchestratorMode=strict",
+            hardenProject="set the project-specific promotion policy to strict/defensive before retrying",
+        )
+        next_actions.append("Lock down permissive posture with DenPublish:PromotionPolicy:TrustedOrchestratorMode=strict or defensive for incident response.")
+    else:
+        checks["promotion_policy"] = check("ok", "trusted orchestrator policy is strict/defensive", mode=mode, source=mode_source)
 
     live_enabled = status.get("livePublishing", {}).get("enabled") is True
     live_credential_configured = status.get("liveCredentialPolicy", {}).get("configured") is True

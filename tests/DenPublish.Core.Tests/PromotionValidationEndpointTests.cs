@@ -266,6 +266,36 @@ public sealed class PromotionValidationEndpointTests
         Assert.Equal(PromotionPolicyMode.AuditWarn, workflow.CapturedRequest.EffectivePolicyContext.Mode);
     }
 
+
+    [Fact]
+    public void ConfiguredPromotionPolicyContextResolver_UsesProjectSpecificTrustedModeOverride()
+    {
+        var resolver = new ConfiguredPromotionPolicyContextResolver(new TrustedOrchestratorPolicyOptions(
+            new HashSet<string>(["den-hermes-runner"], StringComparer.Ordinal),
+            PromotionPolicyMode.AuditWarn,
+            TrustRequestBodyRequestedBy: true,
+            ProjectTrustedModes: new Dictionary<string, PromotionPolicyMode>(StringComparer.Ordinal)
+            {
+                ["den-publish"] = PromotionPolicyMode.Defensive
+            }));
+
+        var baseRequest = Request();
+        var request = baseRequest with
+        {
+            Decision = baseRequest.Decision with
+            {
+                ProjectId = "den-publish",
+                RequestedBy = "den-hermes-runner"
+            },
+            Submission = baseRequest.Submission! with { ProjectId = "den-publish" }
+        };
+
+        var context = resolver.Resolve(request);
+
+        Assert.Equal(PromotionCallerTrust.TrustedOrchestrator, context.CallerTrust);
+        Assert.Equal(PromotionPolicyMode.Defensive, context.Mode);
+    }
+
     [Fact]
     public void Validate_ReturnsInvalidRequestWithoutCallingWorkflowWhenShaIsMalformed()
     {
