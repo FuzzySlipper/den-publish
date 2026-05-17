@@ -1,5 +1,6 @@
 using DenPublish.Api;
 using DenPublish.Core;
+using Microsoft.AspNetCore.Http;
 
 namespace DenPublish.Core.Tests;
 
@@ -194,6 +195,74 @@ public sealed class PromotionValidationEndpointTests
     }
 
     [Fact]
+    public void ConfiguredPromotionPolicyContextResolver_DoesNotTrustForwardedHeadersByDefault()
+    {
+        var resolver = new ConfiguredPromotionPolicyContextResolver(new TrustedOrchestratorPolicyOptions(
+            new HashSet<string>(["den-channels-orchestrator"], StringComparer.Ordinal),
+            PromotionPolicyMode.AuditWarn));
+
+        var context = resolver.Resolve(Request(), ForwardedTrustedHeaders());
+
+        Assert.Equal(PromotionCallerTrust.Worker, context.CallerTrust);
+        Assert.Equal(PromotionPolicyMode.Strict, context.Mode);
+    }
+
+    [Fact]
+    public void ConfiguredPromotionPolicyContextResolver_CanTrustForwardedCallerHeadersWhenEnabled()
+    {
+        var resolver = new ConfiguredPromotionPolicyContextResolver(new TrustedOrchestratorPolicyOptions(
+            new HashSet<string>(["den-channels-orchestrator"], StringComparer.Ordinal),
+            PromotionPolicyMode.AuditWarn,
+            TrustForwardedCallerHeaders: true));
+
+        var context = resolver.Resolve(Request(), ForwardedTrustedHeaders());
+
+        Assert.Equal(PromotionCallerTrust.TrustedOrchestrator, context.CallerTrust);
+        Assert.Equal(PromotionPolicyMode.AuditWarn, context.Mode);
+    }
+
+    [Fact]
+    public void ConfiguredPromotionPolicyContextResolver_RejectsForwardedHeaderRequesterMismatch()
+    {
+        var resolver = new ConfiguredPromotionPolicyContextResolver(new TrustedOrchestratorPolicyOptions(
+            new HashSet<string>(["den-channels-orchestrator"], StringComparer.Ordinal),
+            PromotionPolicyMode.AuditWarn,
+            TrustForwardedCallerHeaders: true));
+        var headers = ForwardedTrustedHeaders();
+        headers["X-Den-Requested-By"] = "different-orchestrator";
+
+        var context = resolver.Resolve(Request(), headers);
+
+        Assert.Equal(PromotionCallerTrust.Worker, context.CallerTrust);
+        Assert.Equal(PromotionPolicyMode.Strict, context.Mode);
+    }
+
+    [Fact]
+    public void Validate_UsesTrustedForwardedCallerHeadersWhenConfigured()
+    {
+        var workflow = new RecordingWorkflow(new PromotionValidationWorkflowResult(
+            PublishValidationResult.Approved("workflow ok"),
+            LocalRef: "refs/den-publish/submissions/sub_1424_001",
+            FetchedHeadCommit: Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")));
+        var resolver = new ConfiguredPromotionPolicyContextResolver(new TrustedOrchestratorPolicyOptions(
+            new HashSet<string>(["den-channels-orchestrator"], StringComparer.Ordinal),
+            PromotionPolicyMode.AuditWarn,
+            TrustForwardedCallerHeaders: true));
+
+        var response = PromotionValidationEndpoints.Validate(
+            Request(),
+            workflow,
+            RequestWorkspacePathResolver.Instance,
+            resolver,
+            ForwardedTrustedHeaders());
+
+        Assert.True(response.IsPublishable);
+        Assert.NotNull(workflow.CapturedRequest);
+        Assert.Equal(PromotionCallerTrust.TrustedOrchestrator, workflow.CapturedRequest.EffectivePolicyContext.CallerTrust);
+        Assert.Equal(PromotionPolicyMode.AuditWarn, workflow.CapturedRequest.EffectivePolicyContext.Mode);
+    }
+
+    [Fact]
     public void Validate_ReturnsInvalidRequestWithoutCallingWorkflowWhenShaIsMalformed()
     {
         var workflow = new RecordingWorkflow(new PromotionValidationWorkflowResult(
@@ -241,6 +310,14 @@ public sealed class PromotionValidationEndpointTests
             return result;
         }
     }
+
+
+    private static HeaderDictionary ForwardedTrustedHeaders() => new()
+    {
+        ["X-Den-Requested-By"] = "den-channels-orchestrator",
+        ["X-Den-Caller-Trust"] = "trusted_orchestrator",
+        ["X-Den-Promotion-Policy-Mode"] = "audit_warn",
+    };
 
     private static PromotionValidationApiRequest Request()
         => new(

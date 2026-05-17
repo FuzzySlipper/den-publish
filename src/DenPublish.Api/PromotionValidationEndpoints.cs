@@ -6,19 +6,19 @@ public static class PromotionValidationEndpoints
 {
     public static IEndpointRouteBuilder MapPromotionValidationEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/promotion/validate", static (PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow, IWorkspacePathResolver workspacePathResolver, IPromotionPolicyContextResolver policyContextResolver) =>
+        app.MapPost("/promotion/validate", static (PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow, IWorkspacePathResolver workspacePathResolver, IPromotionPolicyContextResolver policyContextResolver, HttpContext httpContext) =>
         {
-            var response = Validate(request, workflow, workspacePathResolver, policyContextResolver);
+            var response = Validate(request, workflow, workspacePathResolver, policyContextResolver, httpContext.Request.Headers);
             return response.IsPublishable ? Results.Ok(response) : Results.BadRequest(response);
         });
-        app.MapPost("/promotion/dry-run", static (PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow, IPromotionPublisher publisher, IWorkspacePathResolver workspacePathResolver, IPromotionPolicyContextResolver policyContextResolver) =>
+        app.MapPost("/promotion/dry-run", static (PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow, IPromotionPublisher publisher, IWorkspacePathResolver workspacePathResolver, IPromotionPolicyContextResolver policyContextResolver, HttpContext httpContext) =>
         {
-            var response = ValidateAndDryRun(request, workflow, publisher, workspacePathResolver, policyContextResolver);
+            var response = ValidateAndDryRun(request, workflow, publisher, workspacePathResolver, policyContextResolver, httpContext.Request.Headers);
             return response.Succeeded ? Results.Ok(response) : Results.BadRequest(response);
         });
-        app.MapPost("/promotion/publish", static (PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow, ILivePromotionPublisher publisher, IWorkspacePathResolver workspacePathResolver, IPromotionPolicyContextResolver policyContextResolver) =>
+        app.MapPost("/promotion/publish", static (PromotionValidationApiRequest request, IPromotionValidationWorkflow workflow, ILivePromotionPublisher publisher, IWorkspacePathResolver workspacePathResolver, IPromotionPolicyContextResolver policyContextResolver, HttpContext httpContext) =>
         {
-            var response = ValidateAndPublish(request, workflow, publisher, workspacePathResolver, policyContextResolver);
+            var response = ValidateAndPublish(request, workflow, publisher, workspacePathResolver, policyContextResolver, httpContext.Request.Headers);
             return response.Succeeded ? Results.Ok(response) : Results.BadRequest(response);
         });
         return app;
@@ -37,7 +37,8 @@ public static class PromotionValidationEndpoints
         PromotionValidationApiRequest request,
         IPromotionValidationWorkflow workflow,
         IWorkspacePathResolver workspacePathResolver,
-        IPromotionPolicyContextResolver policyContextResolver)
+        IPromotionPolicyContextResolver policyContextResolver,
+        IHeaderDictionary? headers = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(workflow);
@@ -50,7 +51,7 @@ public static class PromotionValidationEndpoints
             return PromotionValidationApiResponse.FromResult(MalformedRequestResult(workspacePath.Failure!));
         }
 
-        if (!TryMapRequest(request, workspacePath.WorkspacePath!, policyContextResolver.Resolve(request), out var domainRequest, out var failure))
+        if (!TryMapRequest(request, workspacePath.WorkspacePath!, ResolvePolicyContext(policyContextResolver, request, headers), out var domainRequest, out var failure))
         {
             return PromotionValidationApiResponse.FromResult(MalformedRequestResult(failure!));
         }
@@ -77,7 +78,8 @@ public static class PromotionValidationEndpoints
         IPromotionValidationWorkflow workflow,
         IPromotionPublisher publisher,
         IWorkspacePathResolver workspacePathResolver,
-        IPromotionPolicyContextResolver policyContextResolver)
+        IPromotionPolicyContextResolver policyContextResolver,
+        IHeaderDictionary? headers = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(workflow);
@@ -100,7 +102,7 @@ public static class PromotionValidationEndpoints
             return PromotionDryRunApiResponse.FromValidationOnly(malformed);
         }
 
-        if (!TryMapRequest(request, workspacePath.WorkspacePath!, policyContextResolver.Resolve(request), out var domainRequest, out var failure))
+        if (!TryMapRequest(request, workspacePath.WorkspacePath!, ResolvePolicyContext(policyContextResolver, request, headers), out var domainRequest, out var failure))
         {
             var malformed = MalformedRequestResult(failure!);
             return PromotionDryRunApiResponse.FromValidationOnly(malformed);
@@ -137,7 +139,8 @@ public static class PromotionValidationEndpoints
         IPromotionValidationWorkflow workflow,
         ILivePromotionPublisher publisher,
         IWorkspacePathResolver workspacePathResolver,
-        IPromotionPolicyContextResolver policyContextResolver)
+        IPromotionPolicyContextResolver policyContextResolver,
+        IHeaderDictionary? headers = null)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(workflow);
@@ -168,7 +171,7 @@ public static class PromotionValidationEndpoints
             return PromotionDryRunApiResponse.FromValidationOnly(malformed);
         }
 
-        if (!TryMapRequest(request, workspacePath.WorkspacePath!, policyContextResolver.Resolve(request), out var domainRequest, out var failure))
+        if (!TryMapRequest(request, workspacePath.WorkspacePath!, ResolvePolicyContext(policyContextResolver, request, headers), out var domainRequest, out var failure))
         {
             var malformed = MalformedRequestResult(failure!);
             return PromotionDryRunApiResponse.FromValidationOnly(malformed);
@@ -202,6 +205,12 @@ public static class PromotionValidationEndpoints
             PublishValidationResult.Failed(summary, failure),
             LocalRef: null,
             FetchedHeadCommit: null);
+
+    private static PromotionPolicyContext ResolvePolicyContext(
+        IPromotionPolicyContextResolver resolver,
+        PromotionValidationApiRequest request,
+        IHeaderDictionary? headers) =>
+        headers is null ? resolver.Resolve(request) : resolver.Resolve(request, headers);
 
     private static bool TryMapRequest(
         PromotionValidationApiRequest request,

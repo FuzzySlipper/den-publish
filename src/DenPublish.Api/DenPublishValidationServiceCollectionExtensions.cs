@@ -152,6 +152,7 @@ public static class DenPublishValidationServiceCollectionExtensions
         var trustedOrchestrators = section.GetSection("TrustedOrchestrators").Get<string[]>() ?? [];
         var trustedMode = ParsePolicyMode(section["TrustedOrchestratorMode"]);
         var trustRequestBodyRequestedBy = section.GetValue<bool>("TrustRequestBodyRequestedBy");
+        var trustForwardedCallerHeaders = section.GetValue<bool>("TrustForwardedCallerHeaders");
         if (trustedOrchestrators.Length == 0)
         {
             return DefaultPromotionPolicyContextResolver.Instance;
@@ -160,7 +161,8 @@ public static class DenPublishValidationServiceCollectionExtensions
         return new ConfiguredPromotionPolicyContextResolver(new TrustedOrchestratorPolicyOptions(
             new HashSet<string>(trustedOrchestrators.Where(value => !string.IsNullOrWhiteSpace(value)), StringComparer.Ordinal),
             trustedMode,
-            TrustRequestBodyRequestedBy: trustRequestBodyRequestedBy));
+            TrustRequestBodyRequestedBy: trustRequestBodyRequestedBy,
+            TrustForwardedCallerHeaders: trustForwardedCallerHeaders));
     }
 
     private static PromotionPolicyMode ParsePolicyMode(string? value)
