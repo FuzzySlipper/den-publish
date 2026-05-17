@@ -105,7 +105,8 @@ public sealed class PromotionValidationWorkflow(
             .Select(failure => new ValidationWarning(
                 failure.Code,
                 failure.Message,
-                WarningReason(request.Decision, failure)))
+                WarningReason(request.Decision, failure),
+                ObservedValues: WarningObservedValues(request, failure)))
             .ToArray();
         var decisions = rejectedResult.Failures
             .Select(failure => $"audit_warn downgraded {ToSnakeCase(failure.Code)}")
@@ -145,6 +146,26 @@ public sealed class PromotionValidationWorkflow(
 
         return "trusted orchestrator audit_warn policy allows this soft validation failure as an audited warning";
     }
+    private static IReadOnlyDictionary<string, string> WarningObservedValues(
+        PromotionValidationRequest request,
+        ValidationFailure failure)
+    {
+        var context = request.EffectivePolicyContext;
+        return new Dictionary<string, string>
+        {
+            ["policy_mode"] = ToSnakeCase(context.Mode),
+            ["caller_trust"] = ToSnakeCase(context.CallerTrust),
+            ["failure_code"] = ToSnakeCase(failure.Code),
+            ["strict_action"] = "reject",
+            ["permissive_action"] = "allow_with_warning",
+            ["strict_status"] = "rejected",
+            ["permissive_status"] = "validated",
+            ["target_branch"] = request.Decision.TargetBranch,
+            ["requested_by"] = request.Decision.RequestedBy,
+            ["review_round_id"] = request.Decision.ReviewRoundId.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        };
+    }
+
 
     private static PublishValidationResult ToValidationResult(string summary, ValidationFailure? failure)
     {
@@ -162,6 +183,24 @@ public sealed class PromotionValidationWorkflow(
             _ => PublishValidationResult.Rejected(summary, resolvedFailure)
         };
     }
+
+    private static string ToSnakeCase(PromotionCallerTrust trust)
+        => trust switch
+        {
+            PromotionCallerTrust.TrustedOrchestrator => "trusted_orchestrator",
+            PromotionCallerTrust.Untrusted => "untrusted",
+            PromotionCallerTrust.Worker => "worker",
+            _ => trust.ToString().ToLowerInvariant()
+        };
+
+    private static string ToSnakeCase(PromotionPolicyMode mode)
+        => mode switch
+        {
+            PromotionPolicyMode.AuditWarn => "audit_warn",
+            PromotionPolicyMode.Strict => "strict",
+            PromotionPolicyMode.Defensive => "defensive",
+            _ => mode.ToString().ToLowerInvariant()
+        };
 
     private static string ToSnakeCase(PublishFailureCode code)
         => code switch

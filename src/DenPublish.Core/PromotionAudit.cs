@@ -41,7 +41,14 @@ public sealed record PromotionAuditScopeOverride(
 public sealed record PromotionAuditWarning(
     PublishFailureCode Code,
     string Message,
-    string Reason);
+    string Reason,
+    string Severity = "warning",
+    string StrictAction = "reject",
+    string PermissiveAction = "allow_with_warning",
+    IReadOnlyDictionary<string, string>? ObservedValues = null)
+{
+    public IReadOnlyDictionary<string, string> ObservedValues { get; init; } = ObservedValues ?? new Dictionary<string, string>();
+}
 
 public sealed record PromotionAuditOrchestratorOverride(
     string UnclassifiedFailurePolicy,
@@ -50,7 +57,29 @@ public sealed record PromotionAuditOrchestratorOverride(
 
 public sealed record PromotionAuditPolicyContext(
     PromotionCallerTrust CallerTrust,
-    PromotionPolicyMode Mode);
+    PromotionPolicyMode Mode,
+    string? EffectiveProjectPolicy = null)
+{
+    public string EffectiveProjectPolicy { get; init; } = EffectiveProjectPolicy ?? $"{ToSnakeCase(CallerTrust)}:{ToSnakeCase(Mode)}";
+
+    private static string ToSnakeCase(PromotionCallerTrust trust)
+        => trust switch
+        {
+            PromotionCallerTrust.TrustedOrchestrator => "trusted_orchestrator",
+            PromotionCallerTrust.Untrusted => "untrusted",
+            PromotionCallerTrust.Worker => "worker",
+            _ => trust.ToString().ToLowerInvariant()
+        };
+
+    private static string ToSnakeCase(PromotionPolicyMode mode)
+        => mode switch
+        {
+            PromotionPolicyMode.AuditWarn => "audit_warn",
+            PromotionPolicyMode.Strict => "strict",
+            PromotionPolicyMode.Defensive => "defensive",
+            _ => mode.ToString().ToLowerInvariant()
+        };
+}
 
 public sealed record PromotionAuditRecord(
     DateTimeOffset RecordedAt,
@@ -228,7 +257,14 @@ public sealed class AuditedPromotionValidationWorkflow(
 
         return new PromotionValidationWorkflowResult(
             new PublishValidationResult(record.Status, $"replayed audited result: {record.Summary}", record.Decisions, record.Failures, record.Warnings
-                .Select(warning => new ValidationWarning(warning.Code, warning.Message, warning.Reason))
+                .Select(warning => new ValidationWarning(
+                    warning.Code,
+                    warning.Message,
+                    warning.Reason,
+                    warning.Severity,
+                    warning.StrictAction,
+                    warning.PermissiveAction,
+                    warning.ObservedValues))
                 .ToArray()),
             record.LocalRef,
             record.FetchedHeadCommit);
@@ -260,7 +296,7 @@ public sealed class AuditedPromotionValidationWorkflow(
             FetchedHeadCommit: result.FetchedHeadCommit,
             ScopeOverrides: CollectUsedScopeOverrides(request),
             Warnings: result.Validation.Warnings
-                .Select(warning => new PromotionAuditWarning(warning.Code, warning.Message, warning.Reason))
+                .Select(warning => ToAuditWarning(request, warning))
                 .ToArray(),
             OrchestratorOverride: request.Decision.OrchestratorOverride is null
                 ? null
@@ -271,6 +307,77 @@ public sealed class AuditedPromotionValidationWorkflow(
             PolicyContext: new PromotionAuditPolicyContext(
                 request.EffectivePolicyContext.CallerTrust,
                 request.EffectivePolicyContext.Mode));
+
+    private static PromotionAuditWarning ToAuditWarning(PromotionValidationRequest request, ValidationWarning warning)
+    {
+        var observed = new Dictionary<string, string>
+        {
+            ["policy_mode"] = ToSnakeCase(request.EffectivePolicyContext.Mode),
+            ["caller_trust"] = ToSnakeCase(request.EffectivePolicyContext.CallerTrust),
+            ["failure_code"] = ToSnakeCase(warning.Code),
+            ["strict_action"] = warning.StrictAction,
+            ["permissive_action"] = warning.PermissiveAction,
+            ["strict_status"] = "rejected",
+            ["permissive_status"] = "validated",
+            ["target_branch"] = request.Decision.TargetBranch,
+            ["requested_by"] = request.Decision.RequestedBy,
+            ["review_round_id"] = request.Decision.ReviewRoundId.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        };
+
+        foreach (var pair in warning.ObservedValues)
+        {
+            observed[pair.Key] = pair.Value;
+        }
+
+        return new PromotionAuditWarning(
+            warning.Code,
+            warning.Message,
+            warning.Reason,
+            warning.Severity,
+            warning.StrictAction,
+            warning.PermissiveAction,
+            observed);
+    }
+
+    private static string ToSnakeCase(PromotionCallerTrust trust)
+        => trust switch
+        {
+            PromotionCallerTrust.TrustedOrchestrator => "trusted_orchestrator",
+            PromotionCallerTrust.Untrusted => "untrusted",
+            PromotionCallerTrust.Worker => "worker",
+            _ => trust.ToString().ToLowerInvariant()
+        };
+
+    private static string ToSnakeCase(PromotionPolicyMode mode)
+        => mode switch
+        {
+            PromotionPolicyMode.AuditWarn => "audit_warn",
+            PromotionPolicyMode.Strict => "strict",
+            PromotionPolicyMode.Defensive => "defensive",
+            _ => mode.ToString().ToLowerInvariant()
+        };
+
+    private static string ToSnakeCase(PublishFailureCode code)
+        => code switch
+        {
+            PublishFailureCode.InvalidRequest => "invalid_request",
+            PublishFailureCode.MissingSubmission => "missing_submission",
+            PublishFailureCode.StaleSubmission => "stale_submission",
+            PublishFailureCode.MissingReview => "missing_review",
+            PublishFailureCode.ReviewNotApproved => "review_not_approved",
+            PublishFailureCode.UnresolvedBlockingFindings => "unresolved_blocking_findings",
+            PublishFailureCode.MissingRequiredValidation => "missing_required_validation",
+            PublishFailureCode.CodeGateFetchFailed => "code_gate_fetch_failed",
+            PublishFailureCode.CodeGateHeadMismatch => "code_gate_head_mismatch",
+            PublishFailureCode.CanonicalRemoteMismatch => "canonical_remote_mismatch",
+            PublishFailureCode.ScopeViolation => "scope_violation",
+            PublishFailureCode.NonFastForward => "non_fast_forward",
+            PublishFailureCode.CredentialUnavailable => "credential_unavailable",
+            PublishFailureCode.GitPushFailed => "git_push_failed",
+            PublishFailureCode.AuditFailed => "audit_failed",
+            PublishFailureCode.UnclassifiedSoftFailure => "unclassified_soft_failure",
+            _ => code.ToString().ToLowerInvariant()
+        };
 
     private static bool PolicyContextMatches(PromotionAuditPolicyContext? recorded, PromotionPolicyContext current)
     {

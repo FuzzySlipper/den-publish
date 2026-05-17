@@ -67,6 +67,10 @@ public sealed class PromotionValidationEndpointTests
         var warning = Assert.Single(response.Warnings);
         Assert.Equal("unclassified_soft_failure", warning.Code);
         Assert.Equal("environmental issue", warning.Message);
+        Assert.Equal("trusted override", warning.Reason);
+        Assert.Equal("warning", warning.Severity);
+        Assert.Equal("reject", warning.StrictAction);
+        Assert.Equal("allow_with_warning", warning.PermissiveAction);
         Assert.NotNull(workflow.CapturedRequest);
         Assert.Equal(PromotionCallerTrust.TrustedOrchestrator, workflow.CapturedRequest.EffectivePolicyContext.CallerTrust);
         Assert.Equal(PromotionPolicyMode.AuditWarn, workflow.CapturedRequest.EffectivePolicyContext.Mode);

@@ -29,7 +29,17 @@ public enum PublishFailureCode
 
 public sealed record ValidationFailure(PublishFailureCode Code, string Message);
 
-public sealed record ValidationWarning(PublishFailureCode Code, string Message, string Reason);
+public sealed record ValidationWarning(
+    PublishFailureCode Code,
+    string Message,
+    string Reason,
+    string Severity = "warning",
+    string StrictAction = "reject",
+    string PermissiveAction = "allow_with_warning",
+    IReadOnlyDictionary<string, string>? ObservedValues = null)
+{
+    public IReadOnlyDictionary<string, string> ObservedValues { get; init; } = ObservedValues ?? new Dictionary<string, string>();
+}
 
 public sealed record PublishValidationResult(
     PublishValidationStatus Status,

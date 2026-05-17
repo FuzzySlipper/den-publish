@@ -307,6 +307,16 @@ public sealed class PromotionAuditTests
         Assert.Equal(PublishFailureCode.UnclassifiedSoftFailure, warning.Code);
         Assert.Equal("SSH config permission issue after hard proof passed", warning.Message);
         Assert.Contains("trusted orchestrator override", warning.Reason, StringComparison.Ordinal);
+        Assert.Equal("warning", warning.Severity);
+        Assert.Equal("reject", warning.StrictAction);
+        Assert.Equal("allow_with_warning", warning.PermissiveAction);
+        Assert.Equal("audit_warn", warning.ObservedValues["policy_mode"]);
+        Assert.Equal("trusted_orchestrator", warning.ObservedValues["caller_trust"]);
+        Assert.Equal("unclassified_soft_failure", warning.ObservedValues["failure_code"]);
+        Assert.Equal("den-channels-orchestrator", warning.ObservedValues["requested_by"]);
+        Assert.Equal("680", warning.ObservedValues["review_round_id"]);
+        Assert.NotNull(record.PolicyContext);
+        Assert.Equal("trusted_orchestrator:audit_warn", record.PolicyContext.EffectiveProjectPolicy);
         Assert.NotNull(record.OrchestratorOverride);
         Assert.Equal("warn_and_audit", record.OrchestratorOverride.UnclassifiedFailurePolicy);
         Assert.Equal("SSH config permission issue is environmental", record.OrchestratorOverride.Reason);
@@ -330,7 +340,21 @@ public sealed class PromotionAuditTests
             Failures: [],
             LocalRef: "refs/den-publish/submissions/sub_1424_001",
             FetchedHeadCommit: Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
-            ScopeOverrides: [new PromotionAuditScopeOverride("override_scope_1", "finding_1", "Generated file outside normal prefix after tool regeneration", "planner")]);
+            ScopeOverrides: [new PromotionAuditScopeOverride("override_scope_1", "finding_1", "Generated file outside normal prefix after tool regeneration", "planner")],
+            Warnings:
+            [
+                new PromotionAuditWarning(
+                    PublishFailureCode.ScopeViolation,
+                    "observed path outside claim",
+                    "trusted orchestrator audit_warn policy",
+                    ObservedValues: new Dictionary<string, string>
+                    {
+                        ["policy_mode"] = "audit_warn",
+                        ["caller_trust"] = "trusted_orchestrator"
+                    })
+            ],
+            PolicyContext: new PromotionAuditPolicyContext(PromotionCallerTrust.TrustedOrchestrator, PromotionPolicyMode.AuditWarn),
+            RequestedBy: "den-channels-orchestrator");
 
         var result = store.Append(record);
 
@@ -346,6 +370,17 @@ public sealed class PromotionAuditTests
         Assert.Equal("finding_1", overrideJson.GetProperty("finding_id").GetString());
         Assert.Equal("Generated file outside normal prefix after tool regeneration", overrideJson.GetProperty("reason").GetString());
         Assert.Equal("planner", overrideJson.GetProperty("approved_by").GetString());
+        Assert.Equal("den-channels-orchestrator", doc.RootElement.GetProperty("requested_by").GetString());
+        var policyJson = doc.RootElement.GetProperty("policy_context");
+        Assert.Equal("trusted_orchestrator", policyJson.GetProperty("caller_trust").GetString());
+        Assert.Equal("audit_warn", policyJson.GetProperty("mode").GetString());
+        Assert.Equal("trusted_orchestrator:audit_warn", policyJson.GetProperty("effective_project_policy").GetString());
+        var warningJson = Assert.Single(doc.RootElement.GetProperty("warnings").EnumerateArray());
+        Assert.Equal("scope_violation", warningJson.GetProperty("code").GetString());
+        Assert.Equal("warning", warningJson.GetProperty("severity").GetString());
+        Assert.Equal("reject", warningJson.GetProperty("strict_action").GetString());
+        Assert.Equal("allow_with_warning", warningJson.GetProperty("permissive_action").GetString());
+        Assert.Equal("audit_warn", warningJson.GetProperty("observed_values").GetProperty("policy_mode").GetString());
 
         var lookup = store.FindByDecisionId("pub_1424_001");
         Assert.True(lookup.Succeeded);
