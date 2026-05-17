@@ -90,6 +90,24 @@ python3 scripts/check-code-gate-repo.py --project <project_id>
 
 `check-code-gate-repo.py` authenticated Forgejo lookup remains optional and approval-gated. A skipped admin-token lookup is a warning, not a readiness failure, when all runtime and inventory checks otherwise pass.
 
+
+## Workspace and SSH preflight
+
+`check-project-promotion-readiness.py` classifies project-level workflow readiness. When a specific managed workspace exists or a promotion fails with Git/SSH workspace symptoms, also run the read-only workspace preflight:
+
+```bash
+python3 scripts/check-workspace-preflight.py   --workspace /home/agents/runtime/den-publish/workspaces/<project_id>   --expected-owner agent   --json
+```
+
+This checker does not repair ownership, change permissions, read credential contents, or contact remotes. It reports:
+
+- mixed ownership under the managed workspace;
+- `.git` / `.git/config` ownership that can cause `config.lock` or ref-lock failures;
+- `.ssh/config` symlinks that need target review;
+- OpenSSH config paths or symlink targets writable by group/other.
+
+A blocked workspace/SSH preflight is not warning-eligible under `audit_warn`; fix or recreate the managed workspace before retrying fetch/publish.
+
 ## Secret boundary
 
 The checker does not read Forgejo admin tokens, private keys, canonical push credentials, or deploy-key material by default. It does not create repos, mutate service config, or publish code. Any command output included in JSON is limited to existing checker stdout tails and should not contain secrets.

@@ -15,7 +15,7 @@ public sealed class DenPublishRuntimeConfigurationStatusTests
                 ["DenPublish:AuditFilePath"] = "/home/agents/runtime/den-publish/audit/promotion-validation.jsonl",
                 ["DenPublish:Projects:den-channels:CanonicalRemoteUrl"] = "git@github.com:FuzzySlipper/den-channels.git",
                 ["DenPublish:Projects:den-channels:CodeGateRemoteUrl"] = "ssh://192.168.1.10:3022/den-channels/den-channels.git",
-                ["DenPublish:Projects:den-channels:CodeGateGitSshCommand"] = "ssh -F /dev/null -i /runtime/key",
+                ["DenPublish:Projects:den-channels:CodeGateGitSshCommand"] = "ssh -F /dev/null -i /runtime/key -o UserKnownHostsFile=/runtime/known_hosts -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes",
                 ["DenPublish:Projects:den-channels:PushBranchPrefixes:0"] = "task/",
                 ["DenPublish:Projects:den-channels:FastForwardBranches:0"] = "main"
             })
@@ -46,7 +46,7 @@ public sealed class DenPublishRuntimeConfigurationStatusTests
                 ["DenPublish:Projects:0:ProjectId"] = "den-channels",
                 ["DenPublish:Projects:0:CanonicalRemoteUrl"] = "git@github.com:FuzzySlipper/den-channels.git",
                 ["DenPublish:Projects:0:CodeGateRemoteUrl"] = "ssh://192.168.1.10:3022/den-channels/den-channels.git",
-                ["DenPublish:Projects:0:CodeGateGitSshCommand"] = "ssh -F /dev/null -i /runtime/key",
+                ["DenPublish:Projects:0:CodeGateGitSshCommand"] = "ssh -F /dev/null -i /runtime/key -o UserKnownHostsFile=/runtime/known_hosts -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes",
                 ["DenPublish:Projects:0:PushBranchPrefixes:0"] = "task/",
                 ["DenPublish:Projects:0:FastForwardBranches:0"] = "main"
             })

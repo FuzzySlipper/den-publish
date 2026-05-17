@@ -72,7 +72,7 @@ public sealed class GitPromotionPublisherTests : IDisposable
         var git = new RecordingGitCommandRunner(new GitCommandResult(1, string.Empty, "permission denied"));
         var decision = Decision(validateOnly: false, targetBranch: "task/1424-live-publisher", expectedHead: Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
         var validation = ValidatedWorkflowResult(decision.ExpectedHeadCommit, "refs/den-publish/submissions/sub_live_001");
-        var publisher = new GitPromotionPublisher(git, GitPromotionCredentialPolicy.ExplicitSshCommand("ssh -i /run/den-publish/id_ed25519 -o IdentitiesOnly=yes"));
+        var publisher = new GitPromotionPublisher(git, GitPromotionCredentialPolicy.ExplicitSshCommand("ssh -F /dev/null -i /run/den-publish/id_ed25519 -o UserKnownHostsFile=/run/den-publish/known_hosts -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes"));
 
         var result = publisher.Publish(new PromotionPublishRequest(decision, validation, "/tmp/workspace", "git@example.invalid:repo.git"));
 
@@ -106,12 +106,12 @@ public sealed class GitPromotionPublisherTests : IDisposable
         var git = new RecordingGitCommandRunner(new GitCommandResult(0, string.Empty, string.Empty));
         var decision = Decision(validateOnly: false, targetBranch: "task/1424-live-publisher", expectedHead: Sha("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
         var validation = ValidatedWorkflowResult(decision.ExpectedHeadCommit, "refs/den-publish/submissions/sub_live_001");
-        var publisher = new GitPromotionPublisher(git, GitPromotionCredentialPolicy.ExplicitSshCommand("ssh -i /run/den-publish/id_ed25519 -o IdentitiesOnly=yes"));
+        var publisher = new GitPromotionPublisher(git, GitPromotionCredentialPolicy.ExplicitSshCommand("ssh -F /dev/null -i /run/den-publish/id_ed25519 -o UserKnownHostsFile=/run/den-publish/known_hosts -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes"));
 
         var result = publisher.Publish(new PromotionPublishRequest(decision, validation, "/tmp/workspace", "git@example.invalid:repo.git"));
 
         Assert.True(result.Succeeded);
-        Assert.Equal("ssh -i /run/den-publish/id_ed25519 -o IdentitiesOnly=yes", git.Environments.Single()["GIT_SSH_COMMAND"]);
+        Assert.Equal("ssh -F /dev/null -i /run/den-publish/id_ed25519 -o UserKnownHostsFile=/run/den-publish/known_hosts -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes", git.Environments.Single()["GIT_SSH_COMMAND"]);
         Assert.Equal("0", git.Environments.Single()["GIT_TERMINAL_PROMPT"]);
     }
 

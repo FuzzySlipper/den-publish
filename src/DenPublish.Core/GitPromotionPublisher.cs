@@ -14,6 +14,12 @@ public sealed record GitPromotionCredentialPolicy(
             return Unconfigured;
         }
 
+        var sshSafety = SshCommandSafetyPolicy.Validate(sshCommand);
+        if (!sshSafety.IsSafe)
+        {
+            return Unconfigured;
+        }
+
         return new GitPromotionCredentialPolicy(
             true,
             "ssh_command",

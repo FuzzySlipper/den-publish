@@ -189,7 +189,7 @@ public sealed class GitLsRemoteCodeGateRefResolverTests
             ["den-channels"] = new(
                 ProjectId: "den-channels",
                 CodeGateRemoteUrl: submission.CodeGateRemoteUrl,
-                GitSshCommand: "ssh -F /dev/null -i /runtime/den-channels-codegate")
+                GitSshCommand: "ssh -F /dev/null -i /runtime/den-channels-codegate -o UserKnownHostsFile=/runtime/known_hosts -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes")
         });
         var resolver = new GitLsRemoteCodeGateRefResolver(runner, provider);
 
@@ -198,7 +198,7 @@ public sealed class GitLsRemoteCodeGateRefResolverTests
         Assert.True(result.Succeeded);
         Assert.Equal(["ls-remote", "--exit-code", submission.CodeGateRemoteUrl, submission.IngressRef], runner.Arguments);
         Assert.NotNull(runner.Environment);
-        Assert.Equal("ssh -F /dev/null -i /runtime/den-channels-codegate", runner.Environment!["GIT_SSH_COMMAND"]);
+        Assert.Equal("ssh -F /dev/null -i /runtime/den-channels-codegate -o UserKnownHostsFile=/runtime/known_hosts -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes", runner.Environment!["GIT_SSH_COMMAND"]);
         Assert.Equal("0", runner.Environment!["GIT_TERMINAL_PROMPT"]);
     }
 

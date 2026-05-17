@@ -39,14 +39,14 @@ public sealed class GitSubmissionFetcherTests
             ["den-channels"] = new(
                 ProjectId: "den-channels",
                 CodeGateRemoteUrl: submission.CodeGateRemoteUrl,
-                GitSshCommand: "ssh -F /dev/null -i /runtime/den-channels-codegate")
+                GitSshCommand: "ssh -F /dev/null -i /runtime/den-channels-codegate -o UserKnownHostsFile=/runtime/known_hosts -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes")
         });
         ISubmissionFetcher fetcher = new GitSubmissionFetcher(runner, new RecordingWorkspaceDirectoryPreparer(), provider);
 
         var result = fetcher.Fetch(submission, "/workspace");
 
         Assert.True(result.Succeeded);
-        Assert.Equal("ssh -F /dev/null -i /runtime/den-channels-codegate", runner.Environments[1]!["GIT_SSH_COMMAND"]);
+        Assert.Equal("ssh -F /dev/null -i /runtime/den-channels-codegate -o UserKnownHostsFile=/runtime/known_hosts -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes", runner.Environments[1]!["GIT_SSH_COMMAND"]);
         Assert.Equal("0", runner.Environments[1]!["GIT_TERMINAL_PROMPT"]);
     }
 

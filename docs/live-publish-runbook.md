@@ -54,7 +54,7 @@ Recommended files, created only after approval:
 └── known_hosts               # GitHub host key material, 0644 or 0600, agent:agents
 ```
 
-Recommended SSH command shape, stored only in the service environment file and never printed in full in Den messages. Include `ssh -F /dev/null` so ambient SSH config cannot alter the service credential path:
+Recommended SSH command shape, stored only in the service environment file and never printed in full in Den messages. The service now requires the same hardened shape for live publish credentials and project code-gate read credentials: `ssh -F /dev/null`, explicit identity, explicit known_hosts, `IdentitiesOnly=yes`, `BatchMode=yes`, and `StrictHostKeyChecking=yes`.
 
 ```bash
 ssh -F /dev/null -i /home/agents/runtime/den-publish/ssh/den-publish-github   -o IdentitiesOnly=yes   -o BatchMode=yes   -o UserKnownHostsFile=/home/agents/runtime/den-publish/ssh/known_hosts   -o StrictHostKeyChecking=yes
@@ -72,6 +72,15 @@ sudo -n -u agent -- dotnet test /home/dev/den-publish/DenPublish.slnx
 curl -fsS http://127.0.0.1:5090/config/status
 sudo -n -u agent -- wc -l /home/agents/runtime/den-publish/audit/promotion-validation.jsonl
 ```
+
+
+Before enabling live publish or retrying a workspace-related failure, run the read-only workspace preflight against the managed workspace for the project under test:
+
+```bash
+python3 /home/dev/den-publish/scripts/check-workspace-preflight.py   --workspace /home/agents/runtime/den-publish/workspaces/<project_id>   --expected-owner agent   --json
+```
+
+Treat `mixed_workspace_ownership`, `git_config_lock_risk`, `ssh_config_symlink_review_required`, and `ssh_config_permissions_too_open` as hard operational blockers. They indicate hygiene failures that `audit_warn` must not mask. Any ownership repair requires a separate sysadmin approval plan; prefer deleting/recreating disposable managed workspaces or running Git as the service owner over broad permission changes.
 
 Required result:
 

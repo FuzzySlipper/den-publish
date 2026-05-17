@@ -72,6 +72,14 @@ public sealed class ConfiguredCodeGateAccessPolicyProvider(
         var environment = new Dictionary<string, string>(StringComparer.Ordinal);
         if (!string.IsNullOrWhiteSpace(policy.GitSshCommand))
         {
+            var sshSafety = SshCommandSafetyPolicy.Validate(policy.GitSshCommand);
+            if (!sshSafety.IsSafe)
+            {
+                return CodeGateAccessPolicy.Rejected(new ValidationFailure(
+                    PublishFailureCode.CredentialUnavailable,
+                    SshCommandSafetyPolicy.DescribeRequiredOptions(sshSafety)));
+            }
+
             environment["GIT_SSH_COMMAND"] = policy.GitSshCommand;
             environment["GIT_TERMINAL_PROMPT"] = "0";
         }
