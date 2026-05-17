@@ -503,7 +503,14 @@ public sealed record PromotionValidationApiResponse(
             LocalRef: result.LocalRef,
             FetchedHeadCommit: result.FetchedHeadCommit?.Value,
             Warnings: result.Validation.Warnings
-                .Select(warning => new PromotionValidationWarningApiModel(ToApiString(warning.Code), warning.Message, warning.Reason))
+                .Select(warning => new PromotionValidationWarningApiModel(
+                    ToApiString(warning.Code),
+                    warning.Message,
+                    warning.Reason,
+                    warning.Severity,
+                    warning.StrictAction,
+                    warning.PermissiveAction,
+                    warning.ObservedValues))
                 .ToArray());
 
     public static string ToApiString(PublishValidationStatus status)
@@ -540,7 +547,17 @@ public sealed record PromotionValidationApiResponse(
 
 public sealed record PromotionValidationFailureApiModel(string Code, string Message);
 
-public sealed record PromotionValidationWarningApiModel(string Code, string Message, string Reason);
+public sealed record PromotionValidationWarningApiModel(
+    string Code,
+    string Message,
+    string Reason,
+    string Severity = "warning",
+    string StrictAction = "reject",
+    string PermissiveAction = "allow_with_warning",
+    IReadOnlyDictionary<string, string>? ObservedValues = null)
+{
+    public IReadOnlyDictionary<string, string> ObservedValues { get; init; } = ObservedValues ?? new Dictionary<string, string>();
+}
 
 public sealed record PromotionDryRunApiResponse(
     bool Succeeded,
