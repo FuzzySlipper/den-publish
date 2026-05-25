@@ -2,6 +2,14 @@
 
 Standalone Den promotion service for the `den-code-gate` workflow.
 
+> **Current posture (May 2026): historical/specialized lane.** For ordinary
+> trusted local Runner work, the default Den path is review-first direct
+> non-force git promotion from the local `/home/dev/<repo>` checkout after Den
+> review and evidence checks. Treat `den-publish` / code-gate / Trusted
+> Publisher flows as an explicit credential-isolated or untrusted-promotion
+> lane only when a task says to use them. Do not present this repo as the
+> normal Runner promotion path.
+
 `den-publish` is intended to become the credential and Git-promotion boundary. Coder/reviewer agents submit candidate commits to `den-code-gate` Forgejo and Den records exact submission/review/publish decisions. This service validates Den state and mechanically promotes exact reviewed commits to canonical remotes.
 
 ## Current scaffold
