@@ -1,6 +1,13 @@
 # Project promotion readiness checker (#1441)
 
-`check-project-promotion-readiness.py` is the one-command, no-secret preflight for the default Den code workflow:
+> **Historical/specialized posture:** this checker is for the code-gate /
+> `den-publish` lane, not ordinary trusted local Runner promotion. Use it only
+> when a task explicitly opts into code-gate, Trusted Publisher, or
+> credential-isolated publishing. For current default promotion policy, see
+> `_global/agent-code-promotion-policy`; for the Den post-split map, see
+> `den-core/den-post-split-forward-path-vs-history-2026-05`.
+
+`check-project-promotion-readiness.py` is the one-command, no-secret preflight for the specialized Den code-gate workflow:
 
 ```text
 worker -> den-code-gate immutable ref -> Den review state -> Den Core MCP facade -> den-publish dry-run -> approval-gated publish

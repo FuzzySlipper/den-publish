@@ -1,5 +1,12 @@
 # den-publish architecture notes
 
+> **Current posture:** this architecture describes a specialized/historical
+> credential-isolated promotion lane. It is not the ordinary default for trusted
+> local Runner work. For the current default, see
+> `_global/agent-code-promotion-policy` and
+> `den-core/den-post-split-forward-path-vs-history-2026-05`; for this repo's
+> orientation, see `docs/current-posture.md`.
+
 This repo implements the service side of the Den `den-code-gate` publishing contract.
 
 Authoritative design: Den doc `den-code-gate-den-publish-workflow-contract-1420`.

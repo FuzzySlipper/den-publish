@@ -28,7 +28,12 @@ dotnet run --project src/DenPublish.Api
 
 ## Design source of truth
 
-Den document: `den-publish/den-code-gate-den-publish-workflow-contract-1420`.
+Start with `docs/current-posture.md` before following older code-gate
+runbooks. It links the current default policy (`_global/agent-code-promotion-policy`)
+and the post-split map (`den-core/den-post-split-forward-path-vs-history-2026-05`).
+
+Historical/specialized workflow contract: Den document
+`den-publish/den-code-gate-den-publish-workflow-contract-1420`.
 
 ## Service-owned workspace configuration
 
@@ -59,4 +64,10 @@ Do not add canonical push credentials or enable persistent service deployment un
 
 ## Agent workflow UX
 
-For real repo/task rehearsals, use `docs/agent-workflow-ux.md` plus the packet templates under `templates/agent-workflow/`. These artifacts keep coder, reviewer, and orchestrator agents synchronized on exact code-gate refs and reviewed SHAs without requiring orchestrators to type promotion Git commands.
+For explicit code-gate / credential-isolated rehearsals, use
+`docs/agent-workflow-ux.md` plus the packet templates under
+`templates/agent-workflow/`. These artifacts keep coder, reviewer, and
+orchestrator agents synchronized on exact code-gate refs and reviewed SHAs
+without requiring orchestrators to type promotion Git commands. Do not use these
+templates as the ordinary trusted Runner promotion path unless the task opts into
+this specialized lane.

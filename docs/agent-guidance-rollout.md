@@ -1,8 +1,21 @@
 # Agent guidance rollout for code-gate plus den-publish (#1434)
 
+> **Historical/specialized posture (May 2026):** this document records the
+> rollout era when code-gate / `den-publish` was being made prominent as a
+> default cross-machine promotion path. Current ordinary trusted Runner work uses
+> review-first direct non-force git promotion after Den review. Start with
+> `docs/current-posture.md`, `_global/agent-code-promotion-policy`, and
+> `den-core/den-post-split-forward-path-vs-history-2026-05` before treating this
+> runbook as active guidance.
+
 ## Purpose
 
-This rollout makes the new cross-machine promotion path prominent enough that future runner/orchestrator agents do not fall back to legacy Den Core Trusted Publisher tools, worker-local checkouts, `/data/dev`, reviewed-bundle shims, or hand-authored direct API payloads.
+This rollout originally made the cross-machine promotion path prominent enough
+that future runner/orchestrator agents did not fall back to the then-stale Den
+Core Trusted Publisher tools, worker-local checkouts, `/data/dev`,
+reviewed-bundle shims, or hand-authored direct API payloads. Preserve it as
+historical/specialized code-gate evidence, not as the current default for normal
+trusted local Runner work.
 
 ## Global guidance
 
@@ -16,7 +29,8 @@ Guidance entry:
 
 - importance: required
 - audience: all
-- default path: `worker -> den-code-gate -> Den review -> Den Core den-publish facade -> den-publish /promotion/dry-run -> approval-gated /promotion/publish`
+- historical rollout path: `worker -> den-code-gate -> Den review -> Den Core den-publish facade -> den-publish /promotion/dry-run -> approval-gated /promotion/publish`
+- current ordinary trusted Runner default: local task branch -> tests/build -> Den review `looks_good` -> direct non-force git promotion -> Den evidence packet
 
 The shared policy index also points at this document.
 

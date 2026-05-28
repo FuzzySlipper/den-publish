@@ -1,5 +1,13 @@
 # Agent workflow UX for code-gate submissions
 
+> **Specialized lane warning:** use this runbook only for tasks that explicitly
+> opt into `den-code-gate`, `den-publish`, Trusted Publisher, untrusted-worker,
+> or credential-isolated promotion flows. Ordinary trusted local Runner work now
+> follows `_global/agent-code-promotion-policy`: reviewed local task branch,
+> Den review `looks_good`, no unresolved blocking findings, direct non-force git
+> promotion, and a Den evidence packet. See `docs/current-posture.md` and
+> `den-core/den-post-split-forward-path-vs-history-2026-05`.
+
 This document is the operator/agent runbook for Den task #1425. It turns the #1420/#1423/#1424 contracts into packet shapes that coder, reviewer, and orchestrator agents can follow without raw promotion Git commands.
 
 Source-of-truth documents:
